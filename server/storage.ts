@@ -24,6 +24,27 @@ interface Trade {
   pnl: string;
 }
 
+interface PendingApproval {
+  id: string;
+  label: string;
+  side: string;
+  size: number;
+  edge: number;
+  source: string;
+  score: number;
+  market_prob: number;
+  model_prob: number;
+  timestamp: string;
+  status: "pending" | "approved" | "rejected" | "expired";
+}
+
+interface AgentInfo {
+  name: string;
+  status: "running" | "stopped" | "error";
+  last_scan: string;
+  signals_found: number;
+}
+
 interface BotConfig {
   dry_run: boolean;
   starting_balance: number;
@@ -31,10 +52,13 @@ interface BotConfig {
   daily_loss_cap: number;
   max_positions: number;
   min_edge: number;
+  require_approval: boolean;
 }
 
 const STATE_FILE = path.resolve("bot_state.json");
 const TRADES_FILE = path.resolve("logs/trades.csv");
+const APPROVALS_FILE = path.resolve("pending_approvals.json");
+const AGENTS_FILE = path.resolve("agent_status.json");
 
 const DEFAULT_STATE: BotState = {
   daily_pnl: 0,
@@ -45,14 +69,15 @@ const DEFAULT_STATE: BotState = {
   bot_active: false,
 };
 
-// In-memory config (reads from env-like defaults)
+// In-memory config (reads from environment)
 let config: BotConfig = {
-  dry_run: true,
-  starting_balance: 500,
-  max_trade_pct: 0.03,
-  daily_loss_cap: 0.10,
-  max_positions: 3,
-  min_edge: 0.08,
+  dry_run: (process.env.DRY_RUN ?? "true").toLowerCase() === "true",
+  starting_balance: parseFloat(process.env.STARTING_BALANCE ?? "10"),
+  max_trade_pct: parseFloat(process.env.MAX_TRADE_PCT ?? "0.50"),
+  daily_loss_cap: parseFloat(process.env.DAILY_LOSS_CAP ?? "0.30"),
+  max_positions: parseInt(process.env.MAX_POSITIONS ?? "1"),
+  min_edge: parseFloat(process.env.MIN_EDGE ?? "0.08"),
+  require_approval: (process.env.REQUIRE_APPROVAL ?? "true").toLowerCase() === "true",
 };
 
 export interface IStorage {
@@ -61,6 +86,8 @@ export interface IStorage {
   getTrades(): Promise<Trade[]>;
   getConfig(): BotConfig;
   updateConfig(partial: Partial<BotConfig>): void;
+  getPendingApprovals(): Promise<PendingApproval[]>;
+  getAgentStatus(): Promise<AgentInfo[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -132,6 +159,35 @@ export class MemStorage implements IStorage {
 
   updateConfig(partial: Partial<BotConfig>): void {
     config = { ...config, ...partial };
+  }
+
+  async getPendingApprovals(): Promise<PendingApproval[]> {
+    try {
+      if (!fs.existsSync(APPROVALS_FILE)) return [];
+      const raw = fs.readFileSync(APPROVALS_FILE, "utf-8");
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+
+  async getAgentStatus(): Promise<AgentInfo[]> {
+    try {
+      if (!fs.existsSync(AGENTS_FILE)) {
+        // Return default agent list when bot hasn't started yet
+        return [
+          { name: "EarningsAgent", status: "stopped", last_scan: "-", signals_found: 0 },
+          { name: "NewsAgent", status: "stopped", last_scan: "-", signals_found: 0 },
+          { name: "MomentumAgent", status: "stopped", last_scan: "-", signals_found: 0 },
+          { name: "ArbAgent", status: "stopped", last_scan: "-", signals_found: 0 },
+          { name: "CryptoAgent", status: "stopped", last_scan: "-", signals_found: 0 },
+        ];
+      }
+      const raw = fs.readFileSync(AGENTS_FILE, "utf-8");
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
   }
 }
 

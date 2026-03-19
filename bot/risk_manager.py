@@ -82,8 +82,8 @@ class RiskManager:
         if len(self.state["open_positions"]) >= MAX_POSITIONS:
             return False, f"Max positions reached ({MAX_POSITIONS})"
 
-        # Rule 4: Balance too low
-        if self.balance < 10:
+        # Rule 4: Balance too low ($1 minimum — supports $10 starting capital)
+        if self.balance < 1:
             return False, f"Balance critically low: ${self.balance:.2f}"
 
         return True, "OK"

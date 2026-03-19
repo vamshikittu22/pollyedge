@@ -7,6 +7,8 @@ import { RulesPanel } from "@/components/RulesPanel";
 import { PnLChart } from "@/components/PnLChart";
 import { TradesTable } from "@/components/TradesTable";
 import { OpenPositions } from "@/components/OpenPositions";
+import { AgentSwarmPanel } from "@/components/AgentSwarmPanel";
+import { ApprovalQueue } from "@/components/ApprovalQueue";
 import { PerplexityAttribution } from "@/components/PerplexityAttribution";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -78,6 +80,13 @@ export default function Dashboard() {
               PollyEdge
             </h1>
             <Badge
+              variant="secondary"
+              className="text-[10px] font-medium bg-primary/10 text-primary border-primary/20"
+              data-testid="badge-version"
+            >
+              v2.0
+            </Badge>
+            <Badge
               variant={data.dry_run ? "secondary" : "default"}
               className={`text-xs font-medium ${
                 data.dry_run
@@ -108,6 +117,15 @@ export default function Dashboard() {
             maxPositions={parseInt(data.rules.max_positions)}
           />
           <RulesPanel rules={data.rules} />
+        </div>
+
+        {/* v2.0: Agent Swarm + Approval Queue */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <AgentSwarmPanel agents={data.agents || []} />
+          <ApprovalQueue
+            approvals={data.pending_approvals || []}
+            requireApproval={data.require_approval ?? true}
+          />
         </div>
 
         {/* Open Positions (if any) */}

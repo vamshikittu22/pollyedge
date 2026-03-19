@@ -12,6 +12,8 @@ export async function registerRoutes(
     const state = await storage.getBotState();
     const trades = await storage.getTrades();
     const config = storage.getConfig();
+    const pendingApprovals = await storage.getPendingApprovals();
+    const agents = await storage.getAgentStatus();
 
     res.json({
       bot_active: state.bot_active,
@@ -28,6 +30,9 @@ export async function registerRoutes(
         max_positions: String(config.max_positions),
         min_edge: String(config.min_edge),
       },
+      pending_approvals: pendingApprovals,
+      agents,
+      require_approval: config.require_approval,
     });
   });
 

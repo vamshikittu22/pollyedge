@@ -81,8 +81,28 @@ def toggle():
     return {"bot_active": state["bot_active"]}
 
 
+RULES_FILE = "bot_rules.json"
+
+
+def read_rules() -> dict:
+    """Read saved rules from disk."""
+    try:
+        with open(RULES_FILE) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def save_rules(rules: dict) -> None:
+    """Persist rules to disk."""
+    with open(RULES_FILE, "w") as f:
+        json.dump(rules, f, indent=2)
+
+
 @app.post("/api/bot/rules")
 def update_rules(rules: dict):
-    """Update bot rules (writes to environment-like config)."""
-    # This is a simplified version — in production you'd update .env
-    return {"status": "ok", "rules": rules}
+    """Update bot trading rules — persists to bot_rules.json."""
+    existing = read_rules()
+    existing.update(rules)
+    save_rules(existing)
+    return {"status": "ok", "rules": existing}

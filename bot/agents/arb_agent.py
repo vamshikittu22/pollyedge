@@ -1,6 +1,8 @@
 """
-Arb Agent — Scans all active markets for YES+NO < $0.97.
-This is the closest thing to a guaranteed profit on Polymarket.
+Underpriced Agent — Scans all active markets for YES+NO < $0.97.
+When the pair sum is well below $1.00, one or both sides are underpriced.
+Note: This buys only the YES leg, so it's a directional bet on YES
+resolving — NOT a risk-free arb (that would require buying both legs).
 """
 import requests, time
 from bot.agents.base_agent import BaseAgent
@@ -47,8 +49,8 @@ class ArbAgent(BaseAgent):
                         "model_prob":  1.0,
                         "edge":        round(arb_edge, 4),
                         "pair_sum":    pair_sum,
-                        "label":       f"ARB: {mkt.get('question','')[:40]}",
-                        "source":      "arb",
+                        "label":       f"CHEAP: {mkt.get('question','')[:38]}",
+                        "source":      "underpriced",
                         "volume":      float(mkt.get("volume", 0) or 0),
                     })
                 time.sleep(0.2)

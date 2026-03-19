@@ -4,7 +4,10 @@ to build a beat probability, then compares vs Polymarket crowd.
 Falls back gracefully if any source is unavailable.
 """
 import os, re, time, requests
+from dotenv import load_dotenv
 from bot.agents.base_agent import BaseAgent
+
+load_dotenv()
 
 DALOOPA_KEY    = os.getenv("DALOOPA_API_KEY")
 AV_KEY         = os.getenv("ALPHA_VANTAGE_KEY")

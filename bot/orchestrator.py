@@ -1,11 +1,15 @@
 """
 PollyEdge Orchestrator — Manages 5 parallel signal agents.
 Each agent runs in its own thread, sends signals to approval queue.
+Non-blocking approval via ThreadPoolExecutor so one pending approval
+doesn't freeze the entire signal pipeline.
 """
+import os
 import threading
 import queue
 import time
 import logging
+import concurrent.futures
 from datetime import datetime
 
 from bot.agents.earnings_agent   import EarningsAgent
@@ -20,14 +24,22 @@ from bot.logger                  import log_trade
 
 log = logging.getLogger("Orchestrator")
 
+
+def _get_live_balance() -> float:
+    """Reload balance from bot_state.json on every call."""
+    state = load_state()
+    starting = float(os.getenv("STARTING_BALANCE", 10))
+    return starting + state.get("all_time_pnl", 0)
+
+
 class Orchestrator:
     def __init__(self, client, balance: float, dry_run: bool):
         self.client      = client
-        self.balance     = balance
         self.dry_run     = dry_run
         self.signal_q    = queue.Queue()   # Agents post signals here
         self.seen_tokens = set()           # Dedup: don't double-enter
         self.approval    = ApprovalGate()
+        self._pending_futures: dict[str, concurrent.futures.Future] = {}
 
         self.agents = [
             EarningsAgent(self.signal_q),
@@ -51,17 +63,27 @@ class Orchestrator:
         self._process_signals()  # Main thread processes approval queue
 
     def _process_signals(self):
-        """Main loop: read signals, deduplicate, send for approval."""
+        """Main loop: read signals, deduplicate, send for non-blocking approval."""
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
+
         while True:
             try:
+                # Clean up completed futures
+                done_keys = [k for k, f in self._pending_futures.items() if f.done()]
+                for k in done_keys:
+                    del self._pending_futures[k]
+
                 signal = self.signal_q.get(timeout=1)
 
-                # Skip duplicates
+                # Skip duplicates (already traded or pending approval)
                 if signal["token_id"] in self.seen_tokens:
                     continue
+                if signal["token_id"] in self._pending_futures:
+                    continue
 
-                # Risk check
-                rm = RiskManager(self.balance)
+                # Risk check with LIVE balance (Bug 3 fix)
+                current_balance = _get_live_balance()
+                rm = RiskManager(current_balance)
                 allowed, reason = rm.can_trade()
                 if not allowed:
                     log.info(f"Signal blocked by risk: {reason}")
@@ -76,21 +98,40 @@ class Orchestrator:
                 log.info(f"Signal queued for approval: {signal['label']} | "
                          f"edge={signal.get('edge',0):.1%} | score={signal['score']}")
 
-                # Send to approval gate (Telegram message to you)
-                approved = self.approval.request_approval(signal, rm.position_size())
-
-                if approved:
-                    self._execute(signal, rm)
-                    self.seen_tokens.add(signal["token_id"])
-                else:
-                    log.info(f"Rejected: {signal['label']}")
-                    notify(f"Rejected: {signal['label']}", "🚫")
+                # Non-blocking: submit approval to thread pool (Bug 6 fix)
+                future = executor.submit(
+                    self._approve_and_execute, signal
+                )
+                self._pending_futures[signal["token_id"]] = future
 
             except queue.Empty:
+                # Still clean up completed futures during idle
+                done_keys = [k for k, f in self._pending_futures.items() if f.done()]
+                for k in done_keys:
+                    del self._pending_futures[k]
                 continue
             except Exception as e:
                 log.error(f"Orchestrator error: {e}")
                 time.sleep(5)
+
+    def _approve_and_execute(self, signal: dict):
+        """Run approval + execution in a background thread."""
+        try:
+            # Re-check live balance right before approval
+            current_balance = _get_live_balance()
+            rm = RiskManager(current_balance)
+            size = rm.position_size()
+
+            approved = self.approval.request_approval(signal, size)
+
+            if approved:
+                self._execute(signal, rm)
+                self.seen_tokens.add(signal["token_id"])
+            else:
+                log.info(f"Rejected: {signal['label']}")
+                notify(f"Rejected: {signal['label']}", "🚫")
+        except Exception as e:
+            log.error(f"Approve/execute error: {e}")
 
     def _score_signal(self, signal: dict) -> int:
         """Score 0-100. Higher = better trade opportunity."""
@@ -104,11 +145,11 @@ class Orchestrator:
 
         # Boost by source reliability
         source_scores = {
-            "earnings":  25,  # Daloopa fundamental data
-            "arb":       30,  # YES+NO arb is risk-free
-            "news":      20,  # News sentiment
-            "momentum":  15,  # Price momentum
-            "crypto":    15,  # Crypto signals
+            "earnings":    25,  # Daloopa fundamental data
+            "underpriced": 15,  # YES+NO sum discount (not true arb)
+            "news":        20,  # News sentiment
+            "momentum":    15,  # Price momentum
+            "crypto":      15,  # Crypto signals
         }
         score += source_scores.get(signal.get("source", ""), 10)
 
@@ -124,7 +165,7 @@ class Orchestrator:
         return min(score, 100)
 
     def _execute(self, signal: dict, rm: RiskManager):
-        """Execute approved trade."""
+        """Execute approved trade and log it."""
         size  = rm.position_size()
         token = signal["token_id"]
         side  = signal["side"]
@@ -132,6 +173,9 @@ class Orchestrator:
         label = signal["label"]
 
         rm.record_trade_open(token, side, size, price, label)
+
+        # Bug 4 fix: log the trade entry
+        log_trade(token, label, price, 0.0)
 
         if self.dry_run:
             log.info(f"[DRY] EXECUTED: {side} {label} | ${size:.2f} @ {price:.4f}")

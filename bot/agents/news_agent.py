@@ -2,8 +2,11 @@
 News Agent — Scans NewsAPI for breaking news that affects Polymarket markets.
 Cross-references with active markets to find crowd pricing lag.
 """
-import os, requests
+import os, re, requests
+from dotenv import load_dotenv
 from bot.agents.base_agent import BaseAgent
+
+load_dotenv()
 
 NEWSAPI_KEY = os.getenv("NEWSAPI_KEY")
 GAMMA_API   = "https://gamma-api.polymarket.com"
@@ -37,7 +40,9 @@ class NewsAgent(BaseAgent):
 
         for article in articles:
             headline = (article.get("title", "") + " " + article.get("description", "")).lower()
-            words    = set(headline.split())
+            # Use word boundary matching to avoid false positives
+            # e.g. "startup" matching "up", "download" matching "down"
+            words = set(re.findall(r'\b\w+\b', headline))
 
             sentiment = None
             if words & POSITIVE_WORDS:

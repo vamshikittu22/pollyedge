@@ -19,6 +19,9 @@ pending = {}
 
 class ApprovalGate:
 
+    def __init__(self):
+        self._last_update_id = 0
+
     def request_approval(self, signal: dict, size: float) -> bool:
         """
         Send trade proposal to Telegram with inline APPROVE/REJECT buttons.
@@ -100,11 +103,19 @@ class ApprovalGate:
         try:
             resp = requests.get(
                 f"https://api.telegram.org/bot{TOKEN}/getUpdates",
-                params={"timeout": 1, "allowed_updates": ["callback_query"]},
+                params={
+                    "offset": self._last_update_id + 1,
+                    "timeout": 1,
+                    "allowed_updates": ["callback_query"]
+                },
                 timeout=5
             ).json()
 
             for update in resp.get("result", []):
+                self._last_update_id = max(
+                    self._last_update_id,
+                    update.get("update_id", 0)
+                )
                 cb = update.get("callback_query", {})
                 data = cb.get("data", "")
 

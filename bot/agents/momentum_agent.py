@@ -7,12 +7,17 @@ import os
 import requests
 import time
 from collections import deque
+from dotenv import load_dotenv
 from bot.agents.base_agent import BaseAgent
+
+load_dotenv()
 
 GAMMA_API = "https://gamma-api.polymarket.com"
 CLOB_API  = "https://clob.polymarket.com"
 
-EDGE_THRESHOLD = float(os.getenv("EDGE_THRESHOLD", 0.03))
+# Must be >= 0.08 to score any edge points in orchestrator._score_signal()
+# 0.03 default fires too many weak signals that all get filtered out
+EDGE_THRESHOLD = float(os.getenv("EDGE_THRESHOLD", 0.08))
 WINDOW_SIZE    = 10  # Rolling price window
 
 

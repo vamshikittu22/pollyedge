@@ -8,43 +8,63 @@ A high-conviction trading command center. Bot researches opportunities across Po
 
 You spend 5 minutes a day approving trades the bot already vetted.
 
-## Requirements
+## What Was Built (2026-03-20 Audit)
 
-### Validated
+After a full codebase audit, here's what actually exists:
 
-(None yet — ship to validate)
+### Working ✅
+- **Python bot core**: Multi-agent orchestrator (4/5 agents), Telegram approval gate, risk management rules
+- **4 functional agents**: EarningsAgent, NewsAgent, ArbAgent, CryptoAgent
+- **TypeScript server**: Express on port 5000, 3 API endpoints, reads from JSON files
+- **React dashboard**: All major components (BalanceCard, TradesTable, ApprovalQueue, etc.), 5s polling
+- **Approval workflow**: Telegram inline buttons for approve/reject
+- **Trade logging**: CSV file + JSON state persistence
+- **Risk rules**: Daily loss cap, max positions, kill switch
 
-### Active
+### Broken ⚠️
+- **MomentumAgent**: File missing — bot crashes on startup
+- **pending_approvals.json**: Never written by Python — dashboard queue empty
+- **Position exits**: No logic to close positions at profit target/stop loss
+- **log_trade P&L**: Always logs 0.0 (called at entry, not exit)
+- **agent_status.json race condition**: Plain set, not thread-safe
 
-- [ ] Research engine scans multiple markets and signals
-- [ ] Conviction filter only surfaces high-confidence opportunities
-- [ ] Web dashboard shows live opportunities with analysis
-- [ ] One-click approve/reject for trades
-- [ ] Trade history and performance tracking
+### Missing ❌
+- **SQLite**: Roadmap says SQLite, code uses JSON files
+- **WebSocket**: Roadmap says WebSocket, code uses polling
+- **Dashboard approve/reject**: UI has queue but no buttons
+- **Conviction threshold UI**: Hardcoded, not adjustable from dashboard
+- **FastAPI**: Exists but unused (Express is running)
+- **Production deployment**: Local dev only
 
-### Out of Scope
+## Key Decisions
 
-- Telegram notifications — defer to v2 (website first)
-- Autonomous execution — human approval always required
-- Stocks integration — start with Polymarket and crypto only
-
-## Context
-
-Starting from scratch. No existing bot, no Telegram setup. Building the full pipeline: research → filter → dashboard → approval → execution.
+| Decision | Rationale | Status |
+|----------|-----------|--------|
+| JSON files over SQLite | Simpler for rapid iteration, shared state between Python + TS | Working — but migrate later |
+| Express over FastAPI | Already deployed, works fine | Working — FastAPI exists but unused |
+| Telegram approval first | Mobile-friendly, notifications | Working |
+| DRY_RUN=true default | Safety first, paper trade before real money | Working |
+| CoinGecko over ccxt | Simpler API, sufficient for 24h changes | Working |
+| JSON polling over WebSocket | Simpler to implement, good enough for 5s updates | Working |
 
 ## Constraints
 
 - **Approval required**: No fully autonomous trades — human must approve every trade
 - **High conviction only**: Bot filters aggressively, surfaces only the best setups
 - **Start focused**: Polymarket and crypto first, stocks later
+- **Paper trading first**: DRY_RUN=true until confidence built
 
-## Key Decisions
+## Out of Scope (Deferred)
 
-| Decision | Rationale | Outcome |
-|----------|-----------|---------|
-| Website before Telegram | Foundation first, notification layer later | — Pending |
-| Polymarket + crypto first | Most data available, faster to validate thesis | — Pending |
-| Approval-based workflow | User controls risk, bot does the work | — Pending |
+| Feature | Reason |
+|---------|--------|
+| Autonomous execution | Human approval always required |
+| Backtesting | Leads to overfitting; paper trading instead |
+| Auto parameter optimization | Complexity, defer to v2 |
+| Stocks integration | Start focused on Polymarket + crypto |
+| Multi-user support | Single user for now |
+| Social media sentiment | Defer to v2 |
 
 ---
-*Last updated: 2026-03-19 after initialization*
+
+*Last updated: 2026-03-20 after full codebase audit*

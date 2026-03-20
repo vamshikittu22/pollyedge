@@ -1,107 +1,177 @@
 # Roadmap: Pollyedge
 
+> **Reality Check (2026-03-20):** This roadmap has been rewritten based on a full codebase audit. The previous roadmap marked all phases as "Not started" but substantial code exists. This version reflects what actually needs to be built.
+
 ## Overview
 
-A high-conviction trading command center. The bot researches opportunities across Polymarket and crypto using multiple signals, filters for high-confidence setups, and presents them on a web dashboard for human approval before execution. The journey: build the foundation → surface opportunities → analyze signals → filter noise → execute trades.
+A high-conviction trading command center. The bot researches opportunities across Polymarket and crypto using multiple signals, filters for high-confidence setups, and presents them on a web dashboard for human approval before execution.
 
-## Phases
+## Current State (Audit Summary)
 
-- [ ] **Phase 1: Foundation** - FastAPI backend, SQLite storage, real-time dashboard updates
-- [ ] **Phase 2: Dashboard** - Live opportunity display, approve/reject workflow, P&L tracking
-- [ ] **Phase 3: Research Engine** - Market scanners, trend analysis, news sentiment, conviction scoring
-- [ ] **Phase 4: Conviction Filter** - Threshold-based surfacing, configurable rules, user-adjustable settings
-- [ ] **Phase 5: Execution** - Automatic trade execution, outcome tracking, paper trading mode
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Python Bot Core | ✅ Working | Multi-agent, Telegram approval, risk rules |
+| Python Agents | ⚠️ 4/5 | MomentumAgent file missing (bot crashes on start) |
+| TypeScript Server | ✅ Working | Express, 3 endpoints, polling |
+| React Dashboard | ✅ Working | All major components functional |
+| Database | ❌ Not Used | JSON files instead of SQLite |
+| Real-time | ⚠️ Partial | 5s polling instead of WebSocket |
+| Approvals → Dashboard | ❌ Broken | pending_approvals.json never written |
+| Position Exit Logic | ❌ Missing | Positions never close |
+| Deployment | ⚠️ Local Only | No Docker/systemd |
 
-## Phase Details
+## Re-Phased Roadmap
 
-### Phase 1: Foundation
-**Goal**: API backend, storage layer, and real-time communication are in place
-**Depends on**: Nothing (first phase)
-**Requirements**: FOUN-01, FOUN-02, FOUN-03
-**Success Criteria** (what must be TRUE):
-  1. FastAPI server is running and responding to requests (replaces Express)
-  2. SQLite database stores and retrieves opportunities, trades, and agent state across restarts
-  3. Dashboard receives live updates without manual refresh (WebSocket or SSE)
-**Plans**: 3 plans
+### Phase 0: Critical Fixes
+**Goal**: Bot starts cleanly, all 5 agents load, data flows correctly
+**Depends on**: Nothing
+**Why this phase exists**: 5 bugs prevent basic functionality. Fix these first before any new features.
+**Success Criteria**:
+1. `python -m bot.pollyedge_bot` starts without errors (all 5 agents load)
+2. `pending_approvals.json` is written by Python and read by TypeScript
+3. Approval queue shows live pending approvals on dashboard
+4. `agent_status.json` is written by Python and read by TypeScript
+5. Bot connects to Telegram and processes approval callbacks
 
-Plans:
-- [ ] 01-01: Set up FastAPI project with Pydantic models and SQLite via SQLAlchemy
-- [ ] 01-02: Migrate data models (opportunities, trades, agent state) to SQLite
-- [ ] 01-03: Implement WebSocket/SSE endpoint for real-time dashboard updates
+**Plans:**
+- [ ] 00-01: Fix MomentumAgent missing file + orchestrator imports
+- [ ] 00-02: Wire pending_approvals.json (Python writes, TypeScript reads)
+- [ ] 00-03: Fix agent_status.json writes + race conditions
+- [ ] 00-04: Add position monitor (positions never close without this)
+- [ ] 00-05: Fix log_trade() P&L logging + STARTING_BALANCE defaults
 
-### Phase 2: Dashboard
-**Goal**: Users can view opportunities, make decisions, and track performance
-**Depends on**: Phase 1
-**Requirements**: DASH-01, DASH-02, DASH-03, DASH-04, DASH-05, DASH-06
-**Success Criteria** (what must be TRUE):
-  1. User sees a live list of high-conviction opportunities on the dashboard
-  2. Each opportunity shows why it's rated high (analysis breakdown visible)
-  3. User can approve a trade with one click and see confirmation
-  4. User can reject a trade and it disappears from the active list
-  5. User can view complete trade history with outcomes
-  6. User can view portfolio summary with P&L figures
-**Plans**: 4 plans
+---
 
-Plans:
-- [ ] 02-01: Build React dashboard pages (opportunities list, trade history, portfolio)
-- [ ] 02-02: Display analysis breakdown per opportunity (why it's rated high)
-- [ ] 02-03: Implement approve/reject actions wired to FastAPI endpoints
-- [ ] 02-04: Build portfolio summary page with P&L calculations
+### Phase 1: Integration & Polish
+**Goal**: Clean architecture, single source of truth, reliable data flow
+**Depends on**: Phase 0 (needs working bot first)
+**Success Criteria**:
+1. SQLite replaces all JSON file storage (single source of truth)
+2. Dashboard shows all data in real-time (≤2s latency)
+3. Bot and dashboard share the same database (not file-based)
+4. API is clean, documented, and stable
 
-### Phase 3: Research Engine
-**Goal**: Bot scans Polymarket and crypto markets, analyzes signals, and scores each opportunity
-**Depends on**: Phase 1 (needs storage and real-time pipeline)
-**Requirements**: RESR-01, RESR-02, RESR-03, RESR-04, RESR-05
-**Success Criteria** (what must be TRUE):
-  1. Bot discovers active Polymarket markets and evaluates them as opportunities
-  2. Bot fetches crypto market data via ccxt and evaluates it as opportunities
-  3. Bot analyzes price action and volume trends for each market scanned
-  4. Bot evaluates news and sentiment signals for each market scanned
-  5. Each opportunity receives a conviction score (0-100) that reflects confidence
-**Plans**: 5 plans
+**Plans:**
+- [ ] 01-01: Migrate bot_state.json → SQLite (Drizzle ORM)
+- [ ] 01-02: Migrate agent_status.json → SQLite
+- [ ] 01-03: Migrate pending_approvals.json → SQLite
+- [ ] 01-04: Migrate logs/trades.csv → SQLite
+- [ ] 01-05: Wire dashboard to read from SQLite (remove JSON file polling)
 
-Plans:
-- [ ] 03-01: Build Polymarket scanner (market discovery via Gamma API)
-- [ ] 03-02: Build crypto scanner (ccxt integration for price/volume data)
-- [ ] 03-03: Build trend analyzer (price action, volume patterns)
-- [ ] 03-04: Build news analyzer (sentiment signal for markets)
-- [ ] 03-05: Implement conviction scoring (0-100) for each opportunity
+---
+
+### Phase 2: Dashboard Completion
+**Goal**: Full dashboard functionality — approve/reject from UI, live updates
+**Depends on**: Phase 1 (needs clean data layer)
+**Success Criteria**:
+1. User can approve trades from dashboard (not just Telegram)
+2. User can reject trades from dashboard
+3. Dashboard shows opportunities with analysis breakdown
+4. Real-time updates via WebSocket (not polling)
+5. Conviction threshold adjustable from UI
+
+**Plans:**
+- [ ] 02-01: Add approve/reject buttons to dashboard + API endpoints
+- [ ] 02-02: Display opportunity analysis breakdown per signal
+- [ ] 02-03: Implement WebSocket/SSE for real-time updates
+- [ ] 02-04: Add conviction threshold slider with live preview
+
+---
+
+### Phase 3: Research Engine Polish
+**Goal**: All 5 agents working, better signal quality
+**Depends on**: Phase 1 (needs storage layer)
+**Success Criteria**:
+1. All 5 agents generate signals (MomentumAgent fixed)
+2. Each opportunity has clear analysis breakdown
+3. Confidence score (0-100) shown for each signal
+4. News + price action + sentiment all factored in
+
+**Plans:**
+- [ ] 03-01: Implement MomentumAgent (price mean-reversion)
+- [ ] 03-02: Improve conviction scoring algorithm
+- [ ] 03-03: Add Polymarket market discovery scanner
+- [ ] 03-04: Improve opportunity display with full analysis
+
+---
 
 ### Phase 4: Conviction Filter
-**Goal**: Only high-confidence opportunities surface to users; rules are configurable
-**Depends on**: Phase 3 (needs scored opportunities to filter)
-**Requirements**: FILT-01, FILT-02, FILT-03
-**Success Criteria** (what must be TRUE):
-  1. Only opportunities scoring above the configured threshold appear on the dashboard
-  2. Filter rules (thresholds, minimums) are stored in config and load on startup
-  3. User can adjust conviction threshold in the dashboard and see results change immediately
-**Plans**: 2 plans
+**Goal**: Configurable, visible filtering — user controls what surfaces
+**Depends on**: Phase 2 + Phase 3
+**Success Criteria**:
+1. Conviction threshold configurable from UI
+2. Filter rules visible and adjustable (min volume, min edge, etc.)
+3. Filter changes apply immediately (no restart needed)
+4. Only opportunities scoring above threshold appear
 
-Plans:
-- [ ] 04-01: Implement threshold filter (only score ≥ threshold pass through)
-- [ ] 04-02: Add threshold adjustment UI in dashboard with live preview
+**Plans:**
+- [ ] 04-01: Threshold filter logic + UI controls
+- [ ] 04-02: Additional filter rules (volume, edge, source weight)
 
-### Phase 5: Execution
-**Goal**: Approved trades execute automatically; outcomes are tracked; paper mode is available
-**Depends on**: Phase 2 (approval actions) and Phase 4 (filter gates trades)
-**Requirements**: EXEC-01, EXEC-02, EXEC-03
-**Success Criteria** (what must be TRUE):
-  1. Approved Polymarket trade executes automatically via py-clob-client
-  2. Trade outcomes (profit/loss, status) are recorded and retrievable
-  3. User can toggle paper trading mode; no real money moves in paper mode
-**Plans**: 3 plans
+---
 
-Plans:
+### Phase 5: Execution & Production
+**Goal**: Reliable live trading, production-ready deployment
+**Depends on**: Phase 2 (approval actions) + Phase 4 (filtering)
+**Success Criteria**:
+1. Approved Polymarket trades execute via py-clob-client
+2. Paper trading mode works (DRY_RUN=true)
+3. Position monitoring with profit target + stop loss
+4. Production deployment (Docker, systemd, monitoring)
+
+**Plans:**
 - [ ] 05-01: Integrate Polymarket CLOB execution for approved trades
-- [ ] 05-02: Build trade outcome tracking (fills, P&L, status)
-- [ ] 05-03: Implement paper trading mode with simulated fills
+- [ ] 05-02: Position monitor with profit target / stop loss
+- [ ] 05-03: Production deployment (Docker, health checks, pm2)
+
+---
+
+## Phase Dependencies
+
+```
+Phase 0 (Critical Fixes)
+    ↓
+Phase 1 (Integration & Polish)
+    ↓
+  ┌──────────────────────────────────┐
+  ↓                                  ↓
+Phase 2                         Phase 3
+(Dashboard Completion)      (Research Polish)
+  ↓                                  ↓
+  └──────────────┬───────────────────┘
+                 ↓
+           Phase 4
+        (Conviction Filter)
+                 ↓
+           Phase 5
+         (Execution)
+
+```
 
 ## Progress
 
-| Phase | Plans Complete | Status | Completed |
-|-------|----------------|--------|-----------|
-| 1. Foundation | 0/3 | Not started | - |
-| 2. Dashboard | 0/4 | Not started | - |
-| 3. Research Engine | 0/5 | Not started | - |
-| 4. Conviction Filter | 0/2 | Not started | - |
-| 5. Execution | 0/3 | Not started | - |
+| Phase | Status | Plans | Progress |
+|-------|--------|-------|----------|
+| 0. Critical Fixes | Not started | 5 | 0% |
+| 1. Integration | Not started | 5 | 0% |
+| 2. Dashboard | Not started | 4 | 0% |
+| 3. Research | Not started | 4 | 0% |
+| 4. Conviction Filter | Not started | 2 | 0% |
+| 5. Execution | Not started | 3 | 0% |
+
+---
+
+## Original Roadmap vs Re-Phased
+
+| Original | Re-Phased | Why Changed |
+|----------|-----------|-------------|
+| Phase 1: Foundation | Phase 1: Integration | FastAPI+SQLite already 75% done; Express+JSON is working |
+| Phase 2: Dashboard | Phase 2: Dashboard | Mostly built; missing approve/reject from UI |
+| Phase 3: Research Engine | Phase 3: Research Polish | 4/5 agents work; MomentumAgent missing |
+| Phase 4: Conviction Filter | Phase 4: Conviction Filter | Moved after dashboard (needs UI first) |
+| Phase 5: Execution | Phase 5: Execution | Position exit + production added |
+| — | Phase 0: Critical Fixes | **NEW** — 5 bugs block basic functionality |
+
+---
+
+*Last updated: 2026-03-20 — Complete re-phase based on codebase audit*

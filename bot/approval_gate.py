@@ -4,69 +4,25 @@ Every signal gets sent to YOUR Telegram with APPROVE/REJECT buttons.
 Bot waits up to 2 minutes for your response.
 """
 
-import os, time, json, datetime, threading, logging, requests
+import os, time, datetime, logging, requests
 from dotenv import load_dotenv
+from bot.db import (
+    init_db,
+    add_pending_approval,
+    resolve_pending_approval,
+)
 
 load_dotenv()
+
+# Initialize SQLite database on module load
+init_db()
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 TIMEOUT = int(os.getenv("APPROVAL_TIMEOUT_SEC", 120))
 REQUIRE = os.getenv("REQUIRE_APPROVAL", "true").lower() == "true"
-APPROVALS_FILE = "pending_approvals.json"
-_approvals_lock = threading.Lock()
 
 log = logging.getLogger("ApprovalGate")
-
-# Stores pending decisions: {message_id: True/False/None}
-pending = {}
-
-
-def _read_pending() -> list:
-    """Read current approvals list from disk, or return empty list."""
-    try:
-        if os.path.exists(APPROVALS_FILE):
-            with open(APPROVALS_FILE, "r") as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return []
-
-
-def _write_pending(signal: dict, size: float, msg_id_key: str) -> None:
-    """Write a new pending approval entry to pending_approvals.json. Thread-safe."""
-    with _approvals_lock:
-        approvals = _read_pending()
-        entry = {
-            "id": msg_id_key,
-            "label": signal.get("label", "Unknown"),
-            "side": signal.get("side", "unknown"),
-            "size": size,
-            "edge": signal.get("edge", 0),
-            "source": signal.get("source", "unknown"),
-            "score": signal.get("score", 0),
-            "market_prob": signal.get("market_prob", 0),
-            "model_prob": signal.get("model_prob", 0),
-            "timestamp": datetime.datetime.utcnow().isoformat(),
-            "status": "pending",
-        }
-        approvals.append(entry)
-        # Keep only the last 20 entries
-        approvals = approvals[-20:]
-        with open(APPROVALS_FILE, "w") as f:
-            json.dump(approvals, f, indent=2)
-
-
-def _resolve_pending(msg_id_key: str, status: str) -> None:
-    """Update the status of a pending approval. Thread-safe."""
-    with _approvals_lock:
-        approvals = _read_pending()
-        for entry in approvals:
-            if entry.get("id") == msg_id_key:
-                entry["status"] = status
-                break
-        with open(APPROVALS_FILE, "w") as f:
-            json.dump(approvals, f, indent=2)
 
 
 class ApprovalGate:
@@ -136,18 +92,30 @@ class ApprovalGate:
                 log.error("Failed to send approval message")
                 return False
 
-            pending[msg_id_key] = None
-
-            # Write pending approval before poll loop
-            _write_pending(signal, size, msg_id_key)
+            # Write pending approval to SQLite before poll loop
+            entry = {
+                "id": msg_id_key,
+                "label": signal.get("label", "Unknown"),
+                "side": signal.get("side", "unknown"),
+                "size": size,
+                "edge": signal.get("edge", 0),
+                "source": signal.get("source", "unknown"),
+                "score": signal.get("score", 0),
+                "market_prob": signal.get("market_prob", 0),
+                "model_prob": signal.get("model_prob", 0),
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "status": "pending",
+            }
+            add_pending_approval(entry)
 
             # Poll for callback answer
             start = time.time()
             while time.time() - start < TIMEOUT:
                 decision = self._poll_callback(msg_id_key, message_id)
                 if decision is not None:
-                    pending.pop(msg_id_key, None)
-                    _resolve_pending(msg_id_key, "approved" if decision else "rejected")
+                    resolve_pending_approval(
+                        msg_id_key, "approved" if decision else "rejected"
+                    )
                     return decision
                 time.sleep(2)
 
@@ -156,8 +124,7 @@ class ApprovalGate:
             self._edit_message(
                 message_id, f"⏱ *TIMED OUT* — {label}\nAuto-rejected after {TIMEOUT}s"
             )
-            pending.pop(msg_id_key, None)
-            _resolve_pending(msg_id_key, "expired")
+            resolve_pending_approval(msg_id_key, "expired")
             return False
 
         except Exception as e:

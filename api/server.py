@@ -2,6 +2,7 @@
 PollyEdge FastAPI Backend — serves bot state to the dashboard.
 Run: uvicorn api.server:app --port 8000
 """
+
 import csv
 import json
 import os
@@ -52,7 +53,7 @@ def status():
     """Return full bot status for the dashboard."""
     state = read_state()
     trades = read_trades()
-    starting_balance = float(os.getenv("STARTING_BALANCE", 500))
+    starting_balance = float(os.getenv("STARTING_BALANCE", 10))
     return {
         "bot_active": state.get("bot_active", False),
         "daily_pnl": state.get("daily_pnl", 0),

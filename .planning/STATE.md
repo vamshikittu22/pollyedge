@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 1 of 6 (Integration & Polish)
-Plan: 1 of 5 in current phase
+Plan: 4 of 5 in current phase
 Status: Ready to execute next plan
-Last activity: 2026-03-20 — Phase 01-integration Plan 01 COMPLETE ✅
+Last activity: 2026-03-20 — Phase 01-integration Plan 04 COMPLETE ✅
 
-Progress: [▓▓▓░░░░░░░] 20%
+Progress: [▓▓▓▓▓░░░░░] 40%
 
 ## What Was Found
 
@@ -45,7 +45,7 @@ The codebase audit revealed substantial working code (Python bot, Express server
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: 7 min
 - Total execution time: 0.3 hours
 
@@ -54,7 +54,7 @@ The codebase audit revealed substantial working code (Python bot, Express server
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 00 | 5/5 | 22 min | 4.4 min |
-| 01 | 1/5 | 18 min | 18.0 min |
+| 01 | 2/5 | 28 min | 14.0 min |
 
 **Recent Trend:**
 - Last 5 plans: ✅✅✅✅✅
@@ -68,6 +68,7 @@ The codebase audit revealed substantial working code (Python bot, Express server
 | Phase 00 P04 | 2026-03-20 | ~5 min | 3 tasks | 3 files | ✅ COMPLETE |
 | Phase 00 P05 | 2026-03-20 | 5 min | 2 tasks | 2 files | ✅ COMPLETE |
 | Phase 01 P01 | 2026-03-20 | 18 min | 3 tasks | 9 files | ✅ COMPLETE |
+| Phase 01 P04 | 2026-03-20 | 10 min | 2 tasks | 2 files | ✅ COMPLETE |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Recent decisions affecting current work:
 - [Phase 00]: Position monitor daemon checks every 30s, exits at PROFIT_TARGET=+30% or STOP_LOSS=-10%
 - [Phase 00]: log_trade() called at close time (not entry) with actual P&L via position_monitor.py
 - [Phase 01]: SQLite with better-sqlite3 driver via Drizzle ORM (01-01)
+- [Phase 01]: Python sqlite3 built-in over Drizzle ORM for bot/db.py — no external deps (01-04)
+- [Phase 01]: approval_gate.py migrated from pending_approvals.json to SQLite (01-04)
+- [Phase 01]: Prune on insert keeps last 20 pending approvals (01-04)
 
 ### Pending Todos
 

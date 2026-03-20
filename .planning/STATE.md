@@ -11,10 +11,10 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 
 Phase: 0 of 6 (Critical Fixes)
 Plan: 5 of 5 in current phase
-Status: Plan 00-05 complete
-Last activity: 2026-03-20 — Completed STARTING_BALANCE fix (500→10) + load_dotenv() verification
+Status: Plan 00-04 complete — Phase 00 CRITICAL FIXES DONE ✅
+Last activity: 2026-03-20 — Completed position monitor daemon + log_trade timing fix
 
-Progress: [▓▓▓▓▓░░░░░] 80%
+Progress: [▓▓▓▓▓▓▓▓▓▓] 100%
 
 ## What Was Found
 
@@ -31,8 +31,8 @@ The codebase audit revealed substantial working code (Python bot, Express server
 1. ~~MomentumAgent file missing → bot crashes on start~~ ✅ FIXED (00-01)
 2. ~~pending_approvals.json never written → dashboard queue empty~~ ✅ FIXED (00-02)
 3. ~~seen_tokens race condition → thread safety issue~~ ✅ FIXED (00-03)
-4. No position exit logic → trades never close
-5. log_trade P&L always 0.0 → wrong timing
+4. ~~No position exit logic → trades never close~~ ✅ FIXED (00-04)
+5. ~~log_trade P&L always 0.0 → wrong timing~~ ✅ FIXED (00-04)
 
 ### Missing Features
 - SQLite (JSON files used instead)
@@ -63,6 +63,7 @@ The codebase audit revealed substantial working code (Python bot, Express server
 | Phase 00 P01 | 2026-03-20 | 5 min | 2 tasks | 2 files | ✅ COMPLETE |
 | Phase 00 P02 | 2026-03-20 | 5 min | 1 task | 1 file | ✅ COMPLETE |
 | Phase 00 P03 | 2026-03-20 | 2 min | 2 tasks | 2 files | ✅ COMPLETE |
+| Phase 00 P04 | 2026-03-20 | ~5 min | 3 tasks | 3 files | ✅ COMPLETE |
 | Phase 00 P05 | 2026-03-20 | 5 min | 2 tasks | 2 files | ✅ COMPLETE |
 
 ## Accumulated Context
@@ -81,6 +82,8 @@ Recent decisions affecting current work:
 - [Phase 00]: MomentumAgent uses rolling window of 10 price points for mean-reversion
 - [Phase 00]: Thread-safe seen_tokens with threading.Lock; atomic status writes with temp file + os.replace()
 - [Phase 00]: STARTING_BALANCE default $500→$10 for consistency; all Python files call load_dotenv() before os.getenv()
+- [Phase 00]: Position monitor daemon checks every 30s, exits at PROFIT_TARGET=+30% or STOP_LOSS=-10%
+- [Phase 00]: log_trade() called at close time (not entry) with actual P&L via position_monitor.py
 
 ### Pending Todos
 
@@ -92,12 +95,12 @@ None yet.
 
 [Issues that affect future work]
 
-- **Phase 0 must complete before all other phases**: 3/5 bugs fixed (MomentumAgent, pending_approvals, seen_tokens)
+- **Phase 0 COMPLETE**: All 5/5 critical bugs fixed (MomentumAgent, pending_approvals, seen_tokens, position exit, log_trade timing)
 - **STARTING_BALANCE**: now $10 consistent across all entry points (api/server.py + bot/*.py)
 - **SQLite migration**: Deferred to Phase 1 (JSON files work for now)
 
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 00-05-PLAN.md — STARTING_BALANCE fixed ($500→$10) + load_dotenv() verified
-Resume file: .planning/phases/00-critical-fixes/00-05-SUMMARY.md
+Stopped at: Completed 00-04-PLAN.md — Position monitor daemon + log_trade timing fix
+Resume file: .planning/phases/00-critical-fixes/00-04-SUMMARY.md

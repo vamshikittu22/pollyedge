@@ -10,25 +10,25 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 0 of 6 (Critical Fixes)
-Plan: 0 of 5 in current phase
-Status: Ready to plan
-Last activity: 2026-03-20 — Roadmap re-phased based on codebase audit
+Plan: 1 of 5 in current phase
+Status: Plan 00-01 complete
+Last activity: 2026-03-20 — Completed MomentumAgent fix
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [▓░░░░░░░░░] 20%
 
 ## What Was Found
 
 The codebase audit revealed substantial working code (Python bot, Express server, React dashboard) that the previous roadmap marked as "Not started". The new roadmap reflects reality.
 
 ### Working Features
-- Multi-agent Python bot (4/5 agents)
+- Multi-agent Python bot (5/5 agents) ✅
 - Telegram approval workflow
 - Express + React dashboard with 5s polling
 - Risk management rules
 - Trade logging (CSV + JSON)
 
 ### Critical Bugs Blocking Functionality
-1. MomentumAgent file missing → bot crashes on start
+1. ~~MomentumAgent file missing → bot crashes on start~~ ✅ FIXED (00-01)
 2. pending_approvals.json never written → dashboard queue empty
 3. seen_tokens race condition → thread safety issue
 4. No position exit logic → trades never close
@@ -44,21 +44,23 @@ The codebase audit revealed substantial working code (Python bot, Express server
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0.0 hours
+- Total plans completed: 1
+- Average duration: 5 min
+- Total execution time: 0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| - | - | - | - |
+| 00 | 1/5 | 5 min | 5 min |
 
 **Recent Trend:**
-- Last 5 plans: —
-- Trend: —
+- Last 5 plans: ✅
+- Trend: Starting
 
 *Updated after each plan completion*
+
+| Phase 00 P01 | 2026-03-20 | 5 min | 2 tasks | 2 files | ✅ COMPLETE |
 
 ## Accumulated Context
 
@@ -73,6 +75,7 @@ Recent decisions affecting current work:
 - DRY_RUN=true default (safety first)
 - CoinGecko over ccxt (simpler API)
 - JSON polling over WebSocket (simpler, good enough)
+- [Phase 00]: MomentumAgent uses rolling window of 10 price points for mean-reversion
 
 ### Pending Todos
 
@@ -91,5 +94,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Roadmap re-phased based on codebase audit
-Resume file: None
+Stopped at: Completed 00-01-PLAN.md — all 5 agents load correctly
+Resume file: .planning/phases/00-critical-fixes/00-01-SUMMARY.md

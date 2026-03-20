@@ -29,7 +29,7 @@ The codebase audit revealed substantial working code (Python bot, Express server
 
 ### Critical Bugs Blocking Functionality
 1. ~~MomentumAgent file missing → bot crashes on start~~ ✅ FIXED (00-01)
-2. pending_approvals.json never written → dashboard queue empty
+2. ~~pending_approvals.json never written → dashboard queue empty~~ ✅ FIXED (00-02)
 3. ~~seen_tokens race condition → thread safety issue~~ ✅ FIXED (00-03)
 4. No position exit logic → trades never close
 5. log_trade P&L always 0.0 → wrong timing
@@ -61,6 +61,7 @@ The codebase audit revealed substantial working code (Python bot, Express server
 *Updated after each plan completion*
 
 | Phase 00 P01 | 2026-03-20 | 5 min | 2 tasks | 2 files | ✅ COMPLETE |
+| Phase 00 P02 | 2026-03-20 | 5 min | 1 task | 1 file | ✅ COMPLETE |
 | Phase 00 P03 | 2026-03-20 | 2 min | 2 tasks | 2 files | ✅ COMPLETE |
 
 ## Accumulated Context
@@ -89,12 +90,11 @@ None yet.
 
 [Issues that affect future work]
 
-- **Phase 0 must complete before all other phases**: 5 bugs block the bot from starting
+- **Phase 0 must complete before all other phases**: 3/5 bugs fixed (MomentumAgent, pending_approvals, seen_tokens)
 - **SQLite migration**: Deferred to Phase 1 (JSON files work for now)
-- **Dashboard → Python data flow**: pending_approvals.json needs to be wired
 
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 00-03-PLAN.md — thread safety implemented
-Resume file: .planning/phases/00-critical-fixes/00-03-SUMMARY.md
+Stopped at: Completed 00-02-PLAN.md — pending_approvals.json wired from approval_gate
+Resume file: .planning/phases/00-critical-fixes/00-02-SUMMARY.md

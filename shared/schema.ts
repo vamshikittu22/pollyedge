@@ -1,59 +1,66 @@
-import { z } from "zod";
+import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
 
-// Bot status response from the API
-export const botStatusSchema = z.object({
-  bot_active: z.boolean(),
-  daily_pnl: z.number(),
-  all_time_pnl: z.number(),
-  balance: z.number(),
-  dry_run: z.boolean(),
-  total_trades: z.number(),
-  open_positions: z.record(z.string(), z.object({
-    side: z.string(),
-    size: z.number(),
-    entry_price: z.number(),
-    label: z.string(),
-  })),
-  trades: z.array(z.object({
-    timestamp: z.string(),
-    token_id: z.string(),
-    label: z.string(),
-    exit_price: z.string(),
-    pnl: z.string(),
-  })),
-  rules: z.object({
-    max_trade_pct: z.string(),
-    daily_loss_cap: z.string(),
-    max_positions: z.string(),
-    min_edge: z.string(),
-  }),
-  // v2.0: approval queue and agent status
-  pending_approvals: z.array(z.object({
-    id: z.string(),
-    label: z.string(),
-    side: z.string(),
-    size: z.number(),
-    edge: z.number(),
-    source: z.string(),
-    score: z.number(),
-    market_prob: z.number(),
-    model_prob: z.number(),
-    timestamp: z.string(),
-    status: z.enum(["pending", "approved", "rejected", "expired"]),
-  })).optional().default([]),
-  agents: z.array(z.object({
-    name: z.string(),
-    status: z.enum(["running", "stopped", "error"]),
-    last_scan: z.string(),
-    signals_found: z.number(),
-  })).optional().default([]),
-  require_approval: z.boolean().optional().default(true),
+// Bot state table — key-value store for bot persistence
+export const botState = sqliteTable("bot_state", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(), // JSON-encoded
 });
 
-export type BotStatus = z.infer<typeof botStatusSchema>;
+// Open positions table — one row per active position
+export const openPositions = sqliteTable("open_positions", {
+  tokenId: text("token_id").primaryKey(),
+  side: text("side").notNull(), // "BUY" or "SELL"
+  size: real("size").notNull(),
+  entryPrice: real("entry_price").notNull(),
+  label: text("label").notNull(),
+  openedAt: text("opened_at").notNull(), // ISO timestamp
+});
 
-export type Trade = BotStatus["trades"][number];
-export type OpenPosition = BotStatus["open_positions"][string];
-export type Rules = BotStatus["rules"];
-export type PendingApproval = NonNullable<BotStatus["pending_approvals"]>[number];
-export type AgentInfo = NonNullable<BotStatus["agents"]>[number];
+// Agent status table — one row per agent
+export const agentStatus = sqliteTable("agent_status", {
+  name: text("name").primaryKey(),
+  status: text("status").notNull(), // "running" | "stopped" | "error"
+  lastScan: text("last_scan").notNull(), // ISO timestamp
+  signalsFound: integer("signals_found").notNull().default(0),
+});
+
+// Pending approvals table — approval queue for trades
+export const pendingApprovals = sqliteTable("pending_approvals", {
+  id: text("id").primaryKey(),
+  label: text("label").notNull(),
+  side: text("side").notNull(),
+  size: real("size").notNull(),
+  edge: real("edge").notNull(),
+  source: text("source").notNull(),
+  score: integer("score").notNull(),
+  marketProb: real("market_prob").notNull(),
+  modelProb: real("model_prob").notNull(),
+  timestamp: text("timestamp").notNull(), // ISO timestamp
+  status: text("status").notNull().default("pending"), // "pending" | "approved" | "rejected" | "expired"
+});
+
+// Trades table — closed trades history
+export const trades = sqliteTable("trades", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  tokenId: text("token_id").notNull(),
+  label: text("label").notNull(),
+  exitPrice: real("exit_price").notNull(),
+  pnl: real("pnl").notNull(),
+  closedAt: text("closed_at").notNull(), // ISO timestamp
+});
+
+// TypeScript types derived from schema
+export type BotState = typeof botState.$inferSelect;
+export type NewBotState = typeof botState.$inferInsert;
+
+export type OpenPosition = typeof openPositions.$inferSelect;
+export type NewOpenPosition = typeof openPositions.$inferInsert;
+
+export type AgentStatus = typeof agentStatus.$inferSelect;
+export type NewAgentStatus = typeof agentStatus.$inferInsert;
+
+export type PendingApproval = typeof pendingApprovals.$inferSelect;
+export type NewPendingApproval = typeof pendingApprovals.$inferInsert;
+
+export type Trade = typeof trades.$inferSelect;
+export type NewTrade = typeof trades.$inferInsert;

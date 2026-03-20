@@ -17,6 +17,9 @@ dist/
 bot_state.json
 logs/
 
+# SQLite databases
+data/*.db
+
 # OS
 .DS_Store
 Thumbs.db

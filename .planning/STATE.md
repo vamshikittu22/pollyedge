@@ -5,14 +5,14 @@
 See: .planning/PROJECT.md (updated 2026-03-20)
 
 **Core value:** You spend 5 minutes a day approving trades the bot already vetted.
-**Current focus:** Phase 0 — Critical Fixes
+**Current focus:** Phase 1 — Integration & Polish
 
 ## Current Position
 
-Phase: 0 of 6 (Critical Fixes)
-Plan: 5 of 5 in current phase
-Status: Plan 00-04 complete — Phase 00 CRITICAL FIXES DONE ✅
-Last activity: 2026-03-20 — Completed position monitor daemon + log_trade timing fix
+Phase: 1 of 6 (Integration & Polish)
+Plan: 0 of 5 in current phase
+Status: Ready to plan
+Last activity: 2026-03-20 — Phase 0 (Critical Fixes) COMPLETE ✅
 
 Progress: [▓▓▓▓▓▓▓▓▓▓] 100%
 
@@ -102,5 +102,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 00-04-PLAN.md — Position monitor daemon + log_trade timing fix
-Resume file: .planning/phases/00-critical-fixes/00-04-SUMMARY.md
+Stopped at: Phase 0 (Critical Fixes) complete — 5/5 plans executed successfully
+Next: Phase 1 — Integration & Polish

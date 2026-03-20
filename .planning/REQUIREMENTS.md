@@ -71,32 +71,32 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RESR-01 | — | Pending |
-| RESR-02 | — | Pending |
-| RESR-03 | — | Pending |
-| RESR-04 | — | Pending |
-| RESR-05 | — | Pending |
-| FILT-01 | — | Pending |
-| FILT-02 | — | Pending |
-| FILT-03 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| DASH-04 | — | Pending |
-| DASH-05 | — | Pending |
-| DASH-06 | — | Pending |
-| EXEC-01 | — | Pending |
-| EXEC-02 | — | Pending |
-| EXEC-03 | — | Pending |
-| FOUN-01 | — | Pending |
-| FOUN-02 | — | Pending |
-| FOUN-03 | — | Pending |
+| RESR-01 | Phase 3 — Research Engine | Pending |
+| RESR-02 | Phase 3 — Research Engine | Pending |
+| RESR-03 | Phase 3 — Research Engine | Pending |
+| RESR-04 | Phase 3 — Research Engine | Pending |
+| RESR-05 | Phase 3 — Research Engine | Pending |
+| FILT-01 | Phase 4 — Conviction Filter | Pending |
+| FILT-02 | Phase 4 — Conviction Filter | Pending |
+| FILT-03 | Phase 4 — Conviction Filter | Pending |
+| DASH-01 | Phase 2 — Dashboard | Pending |
+| DASH-02 | Phase 2 — Dashboard | Pending |
+| DASH-03 | Phase 2 — Dashboard | Pending |
+| DASH-04 | Phase 2 — Dashboard | Pending |
+| DASH-05 | Phase 2 — Dashboard | Pending |
+| DASH-06 | Phase 2 — Dashboard | Pending |
+| EXEC-01 | Phase 5 — Execution | Pending |
+| EXEC-02 | Phase 5 — Execution | Pending |
+| EXEC-03 | Phase 5 — Execution | Pending |
+| FOUN-01 | Phase 1 — Foundation | Pending |
+| FOUN-02 | Phase 1 — Foundation | Pending |
+| FOUN-03 | Phase 1 — Foundation | Pending |
 
 **Coverage:**
 - v1 requirements: 19 total
-- Mapped to phases: 0
-- Unmapped: 19 ⚠️
+- Mapped to phases: 19
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-19*
-*Last updated: 2026-03-19 after initial definition*
+*Roadmap created: 2026-03-19 — 19/19 requirements mapped to 5 phases*

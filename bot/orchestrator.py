@@ -22,7 +22,6 @@ from bot.agents.crypto_agent import CryptoAgent
 from bot.risk_manager import RiskManager, load_state
 from bot.approval_gate import ApprovalGate
 from bot.notifier import notify
-from bot.logger import log_trade
 
 log = logging.getLogger("Orchestrator")
 
@@ -188,9 +187,6 @@ class Orchestrator:
         label = signal["label"]
 
         rm.record_trade_open(token, side, size, price, label)
-
-        # Bug 4 fix: log the trade entry
-        log_trade(token, label, price, 0.0)
 
         if self.dry_run:
             log.info(f"[DRY] EXECUTED: {side} {label} | ${size:.2f} @ {price:.4f}")

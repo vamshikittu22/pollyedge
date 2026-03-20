@@ -4,7 +4,9 @@ Each agent runs in its own thread, sends signals to approval queue.
 Non-blocking approval via ThreadPoolExecutor so one pending approval
 doesn't freeze the entire signal pipeline.
 """
+
 import os
+from dotenv import load_dotenv
 import threading
 import queue
 import time
@@ -12,17 +14,19 @@ import logging
 import concurrent.futures
 from datetime import datetime
 
-from bot.agents.earnings_agent   import EarningsAgent
-from bot.agents.news_agent       import NewsAgent
-from bot.agents.momentum_agent   import MomentumAgent
-from bot.agents.arb_agent        import ArbAgent
-from bot.agents.crypto_agent     import CryptoAgent
-from bot.risk_manager            import RiskManager, load_state
-from bot.approval_gate           import ApprovalGate
-from bot.notifier                import notify
-from bot.logger                  import log_trade
+from bot.agents.earnings_agent import EarningsAgent
+from bot.agents.news_agent import NewsAgent
+from bot.agents.momentum_agent import MomentumAgent
+from bot.agents.arb_agent import ArbAgent
+from bot.agents.crypto_agent import CryptoAgent
+from bot.risk_manager import RiskManager, load_state
+from bot.approval_gate import ApprovalGate
+from bot.notifier import notify
+from bot.logger import log_trade
 
 log = logging.getLogger("Orchestrator")
+
+load_dotenv()  # Load environment variables before any os.getenv() calls
 
 
 def _get_live_balance() -> float:
@@ -34,11 +38,12 @@ def _get_live_balance() -> float:
 
 class Orchestrator:
     def __init__(self, client, balance: float, dry_run: bool):
-        self.client      = client
-        self.dry_run     = dry_run
-        self.signal_q    = queue.Queue()   # Agents post signals here
-        self.seen_tokens = set()           # Dedup: don't double-enter
-        self.approval    = ApprovalGate()
+        self.client = client
+        self.dry_run = dry_run
+        self.signal_q = queue.Queue()  # Agents post signals here
+        self.seen_tokens = set()  # Dedup: don't double-enter
+        self._seen_lock = threading.Lock()  # Protect seen_tokens from race conditions
+        self.approval = ApprovalGate()
         self._pending_futures: dict[str, concurrent.futures.Future] = {}
 
         self.agents = [
@@ -76,8 +81,9 @@ class Orchestrator:
                 signal = self.signal_q.get(timeout=1)
 
                 # Skip duplicates (already traded or pending approval)
-                if signal["token_id"] in self.seen_tokens:
-                    continue
+                with self._seen_lock:
+                    if signal["token_id"] in self.seen_tokens:
+                        continue
                 if signal["token_id"] in self._pending_futures:
                     continue
 
@@ -92,16 +98,18 @@ class Orchestrator:
                 # Score signals (higher is better)
                 signal["score"] = self._score_signal(signal)
                 if signal["score"] < 50:
-                    log.info(f"Signal too weak (score={signal['score']}): {signal['label']}")
+                    log.info(
+                        f"Signal too weak (score={signal['score']}): {signal['label']}"
+                    )
                     continue
 
-                log.info(f"Signal queued for approval: {signal['label']} | "
-                         f"edge={signal.get('edge',0):.1%} | score={signal['score']}")
+                log.info(
+                    f"Signal queued for approval: {signal['label']} | "
+                    f"edge={signal.get('edge', 0):.1%} | score={signal['score']}"
+                )
 
                 # Non-blocking: submit approval to thread pool (Bug 6 fix)
-                future = executor.submit(
-                    self._approve_and_execute, signal
-                )
+                future = executor.submit(self._approve_and_execute, signal)
                 self._pending_futures[signal["token_id"]] = future
 
             except queue.Empty:
@@ -126,7 +134,8 @@ class Orchestrator:
 
             if approved:
                 self._execute(signal, rm)
-                self.seen_tokens.add(signal["token_id"])
+                with self._seen_lock:
+                    self.seen_tokens.add(signal["token_id"])
             else:
                 log.info(f"Rejected: {signal['label']}")
                 notify(f"Rejected: {signal['label']}", "🚫")
@@ -136,27 +145,33 @@ class Orchestrator:
     def _score_signal(self, signal: dict) -> int:
         """Score 0-100. Higher = better trade opportunity."""
         score = 0
-        edge  = abs(signal.get("edge", 0))
+        edge = abs(signal.get("edge", 0))
 
-        if edge >= 0.20: score += 40
-        elif edge >= 0.15: score += 30
-        elif edge >= 0.10: score += 20
-        elif edge >= 0.08: score += 10
+        if edge >= 0.20:
+            score += 40
+        elif edge >= 0.15:
+            score += 30
+        elif edge >= 0.10:
+            score += 20
+        elif edge >= 0.08:
+            score += 10
 
         # Boost by source reliability
         source_scores = {
-            "earnings":    25,  # Daloopa fundamental data
+            "earnings": 25,  # Daloopa fundamental data
             "underpriced": 15,  # YES+NO sum discount (not true arb)
-            "news":        20,  # News sentiment
-            "momentum":    15,  # Price momentum
-            "crypto":      15,  # Crypto signals
+            "news": 20,  # News sentiment
+            "momentum": 15,  # Price momentum
+            "crypto": 15,  # Crypto signals
         }
         score += source_scores.get(signal.get("source", ""), 10)
 
         # Boost for high volume markets (more liquidity)
         vol = signal.get("volume", 0)
-        if vol > 500_000: score += 20
-        elif vol > 100_000: score += 10
+        if vol > 500_000:
+            score += 20
+        elif vol > 100_000:
+            score += 10
 
         # Boost if multiple agents agree on same market
         confirmations = signal.get("confirmations", 1)
@@ -166,9 +181,9 @@ class Orchestrator:
 
     def _execute(self, signal: dict, rm: RiskManager):
         """Execute approved trade and log it."""
-        size  = rm.position_size()
+        size = rm.position_size()
         token = signal["token_id"]
-        side  = signal["side"]
+        side = signal["side"]
         price = signal.get("market_prob", 0.5)
         label = signal["label"]
 
@@ -184,6 +199,7 @@ class Orchestrator:
 
         try:
             from py_clob_client.clob_types import MarketOrderArgs, OrderType
+
             order = self.client.create_market_order(
                 MarketOrderArgs(token_id=token, amount=size)
             )

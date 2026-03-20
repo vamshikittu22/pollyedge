@@ -3,22 +3,73 @@ Human-in-the-loop approval gate.
 Every signal gets sent to YOUR Telegram with APPROVE/REJECT buttons.
 Bot waits up to 2 minutes for your response.
 """
-import os, time, threading, logging, requests
+
+import os, time, json, datetime, threading, logging, requests
 from dotenv import load_dotenv
+
 load_dotenv()
 
-TOKEN    = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID  = os.getenv("TELEGRAM_CHAT_ID")
-TIMEOUT  = int(os.getenv("APPROVAL_TIMEOUT_SEC", 120))
-REQUIRE  = os.getenv("REQUIRE_APPROVAL", "true").lower() == "true"
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+TIMEOUT = int(os.getenv("APPROVAL_TIMEOUT_SEC", 120))
+REQUIRE = os.getenv("REQUIRE_APPROVAL", "true").lower() == "true"
+APPROVALS_FILE = "pending_approvals.json"
+_approvals_lock = threading.Lock()
 
 log = logging.getLogger("ApprovalGate")
 
 # Stores pending decisions: {message_id: True/False/None}
 pending = {}
 
-class ApprovalGate:
 
+def _read_pending() -> list:
+    """Read current approvals list from disk, or return empty list."""
+    try:
+        if os.path.exists(APPROVALS_FILE):
+            with open(APPROVALS_FILE, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return []
+
+
+def _write_pending(signal: dict, size: float, msg_id_key: str) -> None:
+    """Write a new pending approval entry to pending_approvals.json. Thread-safe."""
+    with _approvals_lock:
+        approvals = _read_pending()
+        entry = {
+            "id": msg_id_key,
+            "label": signal.get("label", "Unknown"),
+            "side": signal.get("side", "unknown"),
+            "size": size,
+            "edge": signal.get("edge", 0),
+            "source": signal.get("source", "unknown"),
+            "score": signal.get("score", 0),
+            "market_prob": signal.get("market_prob", 0),
+            "model_prob": signal.get("model_prob", 0),
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "status": "pending",
+        }
+        approvals.append(entry)
+        # Keep only the last 20 entries
+        approvals = approvals[-20:]
+        with open(APPROVALS_FILE, "w") as f:
+            json.dump(approvals, f, indent=2)
+
+
+def _resolve_pending(msg_id_key: str, status: str) -> None:
+    """Update the status of a pending approval. Thread-safe."""
+    with _approvals_lock:
+        approvals = _read_pending()
+        for entry in approvals:
+            if entry.get("id") == msg_id_key:
+                entry["status"] = status
+                break
+        with open(APPROVALS_FILE, "w") as f:
+            json.dump(approvals, f, indent=2)
+
+
+class ApprovalGate:
     def __init__(self):
         self._last_update_id = 0
 
@@ -35,13 +86,13 @@ class ApprovalGate:
             log.warning("No Telegram config — auto-approving")
             return True
 
-        label      = signal["label"]
-        side       = signal["side"]
-        edge       = signal.get("edge", 0)
-        model_p    = signal.get("model_prob", 0)
-        market_p   = signal.get("market_prob", 0)
-        source     = signal.get("source", "unknown")
-        score      = signal.get("score", 0)
+        label = signal["label"]
+        side = signal["side"]
+        edge = signal.get("edge", 0)
+        model_p = signal.get("model_prob", 0)
+        market_p = signal.get("market_prob", 0)
+        source = signal.get("source", "unknown")
+        score = signal.get("score", 0)
         msg_id_key = f"{signal['token_id'][:8]}_{int(time.time())}"
 
         msg = (
@@ -63,13 +114,21 @@ class ApprovalGate:
                     "text": msg,
                     "parse_mode": "Markdown",
                     "reply_markup": {
-                        "inline_keyboard": [[
-                            {"text": "✅ APPROVE", "callback_data": f"approve_{msg_id_key}"},
-                            {"text": "❌ REJECT",  "callback_data": f"reject_{msg_id_key}"}
-                        ]]
-                    }
+                        "inline_keyboard": [
+                            [
+                                {
+                                    "text": "✅ APPROVE",
+                                    "callback_data": f"approve_{msg_id_key}",
+                                },
+                                {
+                                    "text": "❌ REJECT",
+                                    "callback_data": f"reject_{msg_id_key}",
+                                },
+                            ]
+                        ]
+                    },
                 },
-                timeout=10
+                timeout=10,
             ).json()
 
             message_id = resp.get("result", {}).get("message_id")
@@ -79,19 +138,26 @@ class ApprovalGate:
 
             pending[msg_id_key] = None
 
+            # Write pending approval before poll loop
+            _write_pending(signal, size, msg_id_key)
+
             # Poll for callback answer
             start = time.time()
             while time.time() - start < TIMEOUT:
                 decision = self._poll_callback(msg_id_key, message_id)
                 if decision is not None:
                     pending.pop(msg_id_key, None)
+                    _resolve_pending(msg_id_key, "approved" if decision else "rejected")
                     return decision
                 time.sleep(2)
 
             # Timeout — auto reject
             log.info(f"Approval timeout for {label}")
-            self._edit_message(message_id, f"⏱ *TIMED OUT* — {label}\nAuto-rejected after {TIMEOUT}s")
+            self._edit_message(
+                message_id, f"⏱ *TIMED OUT* — {label}\nAuto-rejected after {TIMEOUT}s"
+            )
             pending.pop(msg_id_key, None)
+            _resolve_pending(msg_id_key, "expired")
             return False
 
         except Exception as e:
@@ -106,15 +172,14 @@ class ApprovalGate:
                 params={
                     "offset": self._last_update_id + 1,
                     "timeout": 1,
-                    "allowed_updates": ["callback_query"]
+                    "allowed_updates": ["callback_query"],
                 },
-                timeout=5
+                timeout=5,
             ).json()
 
             for update in resp.get("result", []):
                 self._last_update_id = max(
-                    self._last_update_id,
-                    update.get("update_id", 0)
+                    self._last_update_id, update.get("update_id", 0)
                 )
                 cb = update.get("callback_query", {})
                 data = cb.get("data", "")
@@ -124,7 +189,7 @@ class ApprovalGate:
                     requests.post(
                         f"https://api.telegram.org/bot{TOKEN}/answerCallbackQuery",
                         json={"callback_query_id": cb["id"]},
-                        timeout=5
+                        timeout=5,
                     )
                     approved = data.startswith("approve_")
                     status = "✅ APPROVED" if approved else "❌ REJECTED"
@@ -139,7 +204,7 @@ class ApprovalGate:
             requests.post(
                 f"https://api.telegram.org/bot{TOKEN}/editMessageText",
                 json={"chat_id": CHAT_ID, "message_id": message_id, "text": text},
-                timeout=5
+                timeout=5,
             )
         except Exception:
             pass

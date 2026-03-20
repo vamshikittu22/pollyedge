@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-03-20)
 ## Current Position
 
 Phase: 0 of 6 (Critical Fixes)
-Plan: 1 of 5 in current phase
-Status: Plan 00-01 complete
-Last activity: 2026-03-20 — Completed MomentumAgent fix
+Plan: 4 of 5 in current phase
+Status: Plan 00-03 complete
+Last activity: 2026-03-20 — Completed thread safety fixes (seen_tokens lock + atomic status writes)
 
-Progress: [▓░░░░░░░░░] 20%
+Progress: [▓▓▓░░░░░░░] 60%
 
 ## What Was Found
 
@@ -30,7 +30,7 @@ The codebase audit revealed substantial working code (Python bot, Express server
 ### Critical Bugs Blocking Functionality
 1. ~~MomentumAgent file missing → bot crashes on start~~ ✅ FIXED (00-01)
 2. pending_approvals.json never written → dashboard queue empty
-3. seen_tokens race condition → thread safety issue
+3. ~~seen_tokens race condition → thread safety issue~~ ✅ FIXED (00-03)
 4. No position exit logic → trades never close
 5. log_trade P&L always 0.0 → wrong timing
 
@@ -44,23 +44,24 @@ The codebase audit revealed substantial working code (Python bot, Express server
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 1
-- Average duration: 5 min
+- Total plans completed: 2
+- Average duration: 3.5 min
 - Total execution time: 0.1 hours
 
 **By Phase:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 00 | 1/5 | 5 min | 5 min |
+| 00 | 2/5 | 7 min | 3.5 min |
 
 **Recent Trend:**
-- Last 5 plans: ✅
+- Last 5 plans: ✅✅
 - Trend: Starting
 
 *Updated after each plan completion*
 
 | Phase 00 P01 | 2026-03-20 | 5 min | 2 tasks | 2 files | ✅ COMPLETE |
+| Phase 00 P03 | 2026-03-20 | 2 min | 2 tasks | 2 files | ✅ COMPLETE |
 
 ## Accumulated Context
 
@@ -76,6 +77,7 @@ Recent decisions affecting current work:
 - CoinGecko over ccxt (simpler API)
 - JSON polling over WebSocket (simpler, good enough)
 - [Phase 00]: MomentumAgent uses rolling window of 10 price points for mean-reversion
+- [Phase 00]: Thread-safe seen_tokens with threading.Lock; atomic status writes with temp file + os.replace()
 
 ### Pending Todos
 
@@ -94,5 +96,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-03-20
-Stopped at: Completed 00-01-PLAN.md — all 5 agents load correctly
-Resume file: .planning/phases/00-critical-fixes/00-01-SUMMARY.md
+Stopped at: Completed 00-03-PLAN.md — thread safety implemented
+Resume file: .planning/phases/00-critical-fixes/00-03-SUMMARY.md

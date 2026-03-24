@@ -1,14 +1,10 @@
-import json
-import os
 import time
 import logging
 import queue
-import threading
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 
-AGENTS_FILE = "agent_status.json"
-_file_lock = threading.Lock()
+from bot.db import update_agent_status
 
 
 class BaseAgent(ABC):
@@ -38,34 +34,8 @@ class BaseAgent(ABC):
             time.sleep(self.interval)
 
     def _write_status(self, status: str, signals_found: int):
-        """Write this agent's status to agent_status.json atomically (temp file + rename)."""
-        with _file_lock:
-            try:
-                existing = []
-                if os.path.exists(AGENTS_FILE):
-                    with open(AGENTS_FILE) as f:
-                        existing = json.load(f)
-
-                entry = {
-                    "name": self.name,
-                    "status": status,
-                    "last_scan": datetime.now(timezone.utc).isoformat(),
-                    "signals_found": signals_found,
-                }
-
-                # Replace this agent's entry or append
-                existing = [e for e in existing if e.get("name") != self.name]
-                existing.append(entry)
-
-                # Atomic write: write to temp file, then rename
-                temp_path = AGENTS_FILE + ".tmp"
-                with open(temp_path, "w") as f:
-                    json.dump(existing, f, indent=2)
-                os.replace(
-                    temp_path, AGENTS_FILE
-                )  # Atomic on POSIX, best-effort on Windows
-            except Exception:
-                pass
+        """Write this agent's status to SQLite."""
+        update_agent_status(self.name, status, signals_found)
 
     @abstractmethod
     def scan(self) -> list[dict]:

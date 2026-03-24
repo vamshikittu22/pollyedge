@@ -1,9 +1,12 @@
 """
-PollyEdge Trade Logger — CSV + console logging for trade history.
+PollyEdge Trade Logger — SQLite primary with CSV backup for trade history.
 """
+
 import csv
 import os
-from datetime import datetime
+from datetime import datetime, timezone
+
+from bot.db import log_trade_to_db
 
 
 LOG_DIR = "logs"
@@ -31,14 +34,20 @@ def log_trade(
     exit_price: float,
     pnl: float,
 ) -> None:
-    """Append a completed trade to the CSV log."""
+    """Log a completed trade to SQLite (primary) and CSV (backup)."""
+    # Primary: SQLite database (for dashboard)
+    log_trade_to_db(token_id, label, exit_price, pnl)
+
+    # Backup: CSV file (for external analysis)
     ensure_csv_header()
     with open(TRADE_FILE, "a", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow([
-            datetime.utcnow().isoformat(),
-            token_id,
-            label,
-            f"{exit_price:.4f}",
-            f"{pnl:.4f}",
-        ])
+        writer.writerow(
+            [
+                datetime.now(timezone.utc).isoformat(),
+                token_id,
+                label,
+                f"{exit_price:.4f}",
+                f"{pnl:.4f}",
+            ]
+        )

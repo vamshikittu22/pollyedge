@@ -37,6 +37,15 @@ def _conn():
             conn.close()
 
 
+def get_db():
+    """Return a database connection with row_factory set. Caller must close."""
+    path = _get_db_path()
+    Path("data").mkdir(exist_ok=True)
+    conn = sqlite3.connect(path, timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def init_db() -> None:
     """Create all tables if they do not exist, seed default bot_state."""
     with _conn() as conn:

@@ -1,5 +1,7 @@
-import fs from "fs";
-import path from "path";
+import * as Database from "better-sqlite3";
+import { eq, desc } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/better-sqlite3";
+import * as schema from "../shared/schema";
 
 // Bot state shape (mirrors Python bot's bot_state.json)
 interface BotState {
@@ -17,11 +19,12 @@ interface BotState {
 }
 
 interface Trade {
-  timestamp: string;
-  token_id: string;
+  id: number;
+  tokenId: string;
   label: string;
-  exit_price: string;
-  pnl: string;
+  exitPrice: number;
+  pnl: number;
+  closedAt: string;
 }
 
 interface PendingApproval {
@@ -32,8 +35,8 @@ interface PendingApproval {
   edge: number;
   source: string;
   score: number;
-  market_prob: number;
-  model_prob: number;
+  marketProb: number;
+  modelProb: number;
   timestamp: string;
   status: "pending" | "approved" | "rejected" | "expired";
 }
@@ -41,8 +44,8 @@ interface PendingApproval {
 interface AgentInfo {
   name: string;
   status: "running" | "stopped" | "error";
-  last_scan: string;
-  signals_found: number;
+  lastScan: string;
+  signalsFound: number;
 }
 
 interface BotConfig {
@@ -54,20 +57,6 @@ interface BotConfig {
   min_edge: number;
   require_approval: boolean;
 }
-
-const STATE_FILE = path.resolve("bot_state.json");
-const TRADES_FILE = path.resolve("logs/trades.csv");
-const APPROVALS_FILE = path.resolve("pending_approvals.json");
-const AGENTS_FILE = path.resolve("agent_status.json");
-
-const DEFAULT_STATE: BotState = {
-  daily_pnl: 0,
-  daily_date: new Date().toISOString().split("T")[0],
-  open_positions: {},
-  total_trades: 0,
-  all_time_pnl: 0,
-  bot_active: false,
-};
 
 // In-memory config (reads from environment)
 let config: BotConfig = {
@@ -90,67 +79,89 @@ export interface IStorage {
   getAgentStatus(): Promise<AgentInfo[]>;
 }
 
-export class MemStorage implements IStorage {
-  private state: BotState;
+export class SQLiteStorage implements IStorage {
+  private db: ReturnType<typeof drizzle>;
 
   constructor() {
-    // Try to load existing state from disk
-    this.state = this.loadFromDisk();
-  }
-
-  private loadFromDisk(): BotState {
-    try {
-      if (fs.existsSync(STATE_FILE)) {
-        const raw = fs.readFileSync(STATE_FILE, "utf-8");
-        return JSON.parse(raw);
-      }
-    } catch {
-      // Fall through to default
-    }
-    return { ...DEFAULT_STATE };
+    const sqlite = new Database("data/pollyedge.db");
+    this.db = drizzle(sqlite, { schema });
   }
 
   async getBotState(): Promise<BotState> {
-    // Re-read from disk each time (bot may have updated it)
-    try {
-      if (fs.existsSync(STATE_FILE)) {
-        const raw = fs.readFileSync(STATE_FILE, "utf-8");
-        this.state = JSON.parse(raw);
+    // Read from SQLite bot_state table
+    const rows = this.db.select().from(schema.botState).all();
+    const state: Record<string, unknown> = {};
+    
+    for (const row of rows) {
+      try {
+        state[row.key] = JSON.parse(row.value);
+      } catch {
+        state[row.key] = row.value;
       }
-    } catch {
-      // Use cached state
     }
-    return this.state;
+
+    // Read open_positions from separate table
+    const positions = this.db.select().from(schema.openPositions).all();
+    const openPositions: BotState["open_positions"] = {};
+    
+    for (const pos of positions) {
+      openPositions[pos.tokenId] = {
+        side: pos.side,
+        size: pos.size,
+        entry_price: pos.entryPrice,
+        label: pos.label,
+      };
+    }
+
+    return {
+      daily_pnl: (state.daily_pnl as number) ?? 0,
+      daily_date: (state.daily_date as string) ?? new Date().toISOString().split("T")[0],
+      open_positions: openPositions,
+      total_trades: (state.total_trades as number) ?? 0,
+      all_time_pnl: (state.all_time_pnl as number) ?? 0,
+      bot_active: (state.bot_active as boolean) ?? false,
+    };
   }
 
   async saveBotState(state: BotState): Promise<void> {
-    this.state = state;
-    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+    // Save to SQLite bot_state table
+    const stateData = {
+      daily_pnl: state.daily_pnl,
+      daily_date: state.daily_date,
+      total_trades: state.total_trades,
+      all_time_pnl: state.all_time_pnl,
+      bot_active: state.bot_active,
+    };
+
+    for (const [key, value] of Object.entries(stateData)) {
+      this.db.insert(schema.botState)
+        .values({ key, value: JSON.stringify(value) })
+        .onConflictDoUpdate({
+          target: schema.botState.key,
+          set: { value: JSON.stringify(value) },
+        })
+        .run();
+    }
+
+    // Note: open_positions are managed separately via add/remove_position
   }
 
   async getTrades(): Promise<Trade[]> {
-    try {
-      if (!fs.existsSync(TRADES_FILE)) return [];
-      const raw = fs.readFileSync(TRADES_FILE, "utf-8");
-      const lines = raw.trim().split("\n");
-      if (lines.length <= 1) return [];
-
-      const headers = lines[0].split(",");
-      const trades: Trade[] = [];
-
-      for (let i = Math.max(1, lines.length - 50); i < lines.length; i++) {
-        const values = lines[i].split(",");
-        const trade: Record<string, string> = {};
-        headers.forEach((h, idx) => {
-          trade[h.trim()] = (values[idx] || "").trim();
-        });
-        trades.push(trade as unknown as Trade);
-      }
-
-      return trades;
-    } catch {
-      return [];
-    }
+    // Read from SQLite trades table
+    const rows = this.db.select()
+      .from(schema.trades)
+      .orderBy(desc(schema.trades.closedAt))
+      .limit(50)
+      .all();
+    
+    return rows.map(row => ({
+      id: row.id,
+      tokenId: row.tokenId,
+      label: row.label,
+      exitPrice: row.exitPrice,
+      pnl: row.pnl,
+      closedAt: row.closedAt,
+    }));
   }
 
   getConfig(): BotConfig {
@@ -162,33 +173,54 @@ export class MemStorage implements IStorage {
   }
 
   async getPendingApprovals(): Promise<PendingApproval[]> {
-    try {
-      if (!fs.existsSync(APPROVALS_FILE)) return [];
-      const raw = fs.readFileSync(APPROVALS_FILE, "utf-8");
-      return JSON.parse(raw);
-    } catch {
-      return [];
-    }
+    // Read from SQLite pending_approvals table
+    const rows = this.db.select()
+      .from(schema.pendingApprovals)
+      .orderBy(desc(schema.pendingApprovals.timestamp))
+      .all();
+    
+    return rows.map(row => ({
+      id: row.id,
+      label: row.label,
+      side: row.side,
+      size: row.size,
+      edge: row.edge,
+      source: row.source,
+      score: row.score,
+      marketProb: row.marketProb,
+      modelProb: row.modelProb,
+      timestamp: row.timestamp,
+      status: row.status as PendingApproval["status"],
+    }));
   }
 
   async getAgentStatus(): Promise<AgentInfo[]> {
-    try {
-      if (!fs.existsSync(AGENTS_FILE)) {
-        // Return default agent list when bot hasn't started yet
-        return [
-          { name: "EarningsAgent", status: "stopped", last_scan: "-", signals_found: 0 },
-          { name: "NewsAgent", status: "stopped", last_scan: "-", signals_found: 0 },
-          { name: "MomentumAgent", status: "stopped", last_scan: "-", signals_found: 0 },
-          { name: "ArbAgent", status: "stopped", last_scan: "-", signals_found: 0 },
-          { name: "CryptoAgent", status: "stopped", last_scan: "-", signals_found: 0 },
-        ];
-      }
-      const raw = fs.readFileSync(AGENTS_FILE, "utf-8");
-      return JSON.parse(raw);
-    } catch {
-      return [];
+    // Read from SQLite agent_status table
+    const rows = this.db.select()
+      .from(schema.agentStatus)
+      .orderBy(schema.agentStatus.name)
+      .all();
+    
+    if (rows.length === 0) {
+      // Return default agent list when bot hasn't started yet
+      return [
+        { name: "EarningsAgent", status: "stopped", lastScan: "-", signalsFound: 0 },
+        { name: "NewsAgent", status: "stopped", lastScan: "-", signalsFound: 0 },
+        { name: "MomentumAgent", status: "stopped", lastScan: "-", signalsFound: 0 },
+        { name: "ArbAgent", status: "stopped", lastScan: "-", signalsFound: 0 },
+        { name: "CryptoAgent", status: "stopped", lastScan: "-", signalsFound: 0 },
+      ];
     }
+    
+    return rows.map(row => ({
+      name: row.name,
+      status: row.status as AgentInfo["status"],
+      lastScan: row.lastScan,
+      signalsFound: row.signalsFound,
+    }));
   }
 }
 
-export const storage = new MemStorage();
+// Backward compatibility: export as MemStorage
+export const MemStorage = SQLiteStorage;
+export const storage = new SQLiteStorage();

@@ -174,7 +174,14 @@ def add_position(
             "INSERT OR REPLACE INTO open_positions "
             "(token_id, side, size, entry_price, label, opened_at) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            (token_id, side, size, entry_price, label, datetime.now(timezone.utc).isoformat()),
+            (
+                token_id,
+                side,
+                size,
+                entry_price,
+                label,
+                datetime.now(timezone.utc).isoformat(),
+            ),
         )
 
 
@@ -230,19 +237,25 @@ def _prune_approvals(conn: sqlite3.Connection, keep: int = 20) -> None:
     old_ids = [row["id"] for row in cursor]
     if old_ids:
         placeholders = ",".join("?" * len(old_ids))
-        conn.execute(f"DELETE FROM pending_approvals WHERE id IN ({placeholders})", old_ids)
+        conn.execute(
+            f"DELETE FROM pending_approvals WHERE id IN ({placeholders})", old_ids
+        )
+
+            )
+        else:
+            cursor = conn.execute("SELECT * FROM pending_approvals ORDER BY timestamp DESC")
+        return [dict(row) for row in cursor]
 
 
-def get_pending_approvals(status: Optional[str] = "pending") -> list[dict]:
-    """Return pending approval entries. By default only status=pending, ordered newest first."""
-    with _conn() as conn:
-        if status:
-            cursor = conn.execute(
                 "SELECT * FROM pending_approvals WHERE status = ? ORDER BY timestamp DESC",
                 (status,),
             )
         else:
-            cursor = conn.execute("SELECT * FROM pending_approvals ORDER BY timestamp 
+            cursor = conn.execute(
+                "SELECT * FROM pending_approvals ORDER BY timestamp DESC"
+            )
+
+
 # ----------------------------------------------------------------------
 # Agent Status
 # ----------------------------------------------------------------------
@@ -280,7 +293,9 @@ def update_agent_status(name: str, status: str, signals_found: int) -> None:
 
 
 # Backward-compatibility aliases
-def upsert_agent_status(name: str, status: str, last_scan: str, signals_found: int) -> None:
+def upsert_agent_status(
+    name: str, status: str, last_scan: str, signals_found: int
+) -> None:
     """Legacy alias for update_agent_status (preserves original signature)."""
     with _conn() as conn:
         conn.execute(

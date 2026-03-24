@@ -18,6 +18,31 @@ from bot.db import (
     init_db,
 )
 
+
+# Backward compatibility: load_state/save_state aliases for files still using JSON API
+def load_state() -> dict:
+    """Return full state dict (bot_state + open_positions) for legacy compatibility."""
+    state = get_bot_state()
+    state["open_positions"] = get_open_positions()
+    return state
+
+
+def save_state(state: dict) -> None:
+    """Persist state dict to SQLite (legacy compatibility)."""
+    # Persist bot_state keys
+    for key in [
+        "daily_pnl",
+        "daily_date",
+        "total_trades",
+        "all_time_pnl",
+        "bot_active",
+        "balance",
+    ]:
+        if key in state:
+            set_bot_state(key, state[key])
+    # Note: open_positions are managed via add_position/remove_position, not bulk save
+
+
 MAX_TRADE_PCT = float(os.getenv("MAX_TRADE_PCT", 0.03))  # 3% per trade
 DAILY_LOSS_CAP = float(os.getenv("DAILY_LOSS_CAP", 0.10))  # Stop if -10% today
 MAX_POSITIONS = int(os.getenv("MAX_POSITIONS", 3))  # Max 3 open at once

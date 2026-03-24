@@ -251,6 +251,25 @@ def _prune_approvals(conn: sqlite3.Connection, keep: int = 20) -> None:
         )
 
 
+def resolve_pending_approval(id: str, status: str) -> None:
+    """Update a pending approval's status (e.g., 'approved', 'rejected', 'expired')."""
+    with _conn() as conn:
+        conn.execute(
+            "UPDATE pending_approvals SET status = ? WHERE id = ?",
+            (status, id),
+        )
+
+
+def get_pending_approvals(status: str = "pending", limit: int = 50) -> list[dict]:
+    """Return pending approvals with the given status."""
+    with _conn() as conn:
+        cursor = conn.execute(
+            "SELECT * FROM pending_approvals WHERE status = ? ORDER BY timestamp DESC LIMIT ?",
+            (status, limit),
+        )
+        return [dict(row) for row in cursor]
+
+
 # ----------------------------------------------------------------------
 # Agent Status
 # ----------------------------------------------------------------------

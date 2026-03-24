@@ -241,20 +241,6 @@ def _prune_approvals(conn: sqlite3.Connection, keep: int = 20) -> None:
             f"DELETE FROM pending_approvals WHERE id IN ({placeholders})", old_ids
         )
 
-            )
-        else:
-            cursor = conn.execute("SELECT * FROM pending_approvals ORDER BY timestamp DESC")
-        return [dict(row) for row in cursor]
-
-
-                "SELECT * FROM pending_approvals WHERE status = ? ORDER BY timestamp DESC",
-                (status,),
-            )
-        else:
-            cursor = conn.execute(
-                "SELECT * FROM pending_approvals ORDER BY timestamp DESC"
-            )
-
 
 # ----------------------------------------------------------------------
 # Agent Status
@@ -328,6 +314,12 @@ def log_trade(token_id: str, label: str, exit_price: float, pnl: float) -> None:
         )
 
 
+# Alias for plan 01-05 compatibility
+def log_trade_to_db(token_id: str, label: str, exit_price: float, pnl: float) -> None:
+    """Alias for log_trade — insert a new closed trade."""
+    return log_trade(token_id, label, exit_price, pnl)
+
+
 def get_trades(limit: int = 50) -> list[dict]:
     """Return recent closed trades, newest first."""
     with _conn() as conn:
@@ -335,3 +327,17 @@ def get_trades(limit: int = 50) -> list[dict]:
             "SELECT * FROM trades ORDER BY closed_at DESC LIMIT ?", (limit,)
         )
         return [dict(row) for row in cursor]
+
+
+# Alias for plan 01-05 compatibility
+def get_recent_trades(limit: int = 50) -> list[dict]:
+    """Alias for get_trades — return recent closed trades."""
+    return get_trades(limit)
+
+
+def get_all_time_pnl() -> float:
+    """Calculate sum of PnL from all trades."""
+    with _conn() as conn:
+        cursor = conn.execute("SELECT COALESCE(SUM(pnl), 0) AS total FROM trades")
+        row = cursor.fetchone()
+        return float(row["total"]) if row else 0.0

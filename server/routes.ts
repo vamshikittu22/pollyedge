@@ -63,17 +63,18 @@ export async function registerRoutes(
       total_trades: state.total_trades,
       open_positions: state.open_positions,
       trades,
-      rules: {
-        max_trade_pct: String(config.max_trade_pct),
-        daily_loss_cap: String(config.daily_loss_cap),
-        max_positions: String(config.max_positions),
-        min_edge: String(config.min_edge),
-      },
-      pending_approvals: pendingApprovals,
-      agents,
-      require_approval: config.require_approval,
-    });
+rules: {
+      max_trade_pct: String(config.max_trade_pct),
+      daily_loss_cap: String(config.daily_loss_cap),
+      max_positions: String(config.max_positions),
+      min_edge: String(config.min_edge),
+      conviction_threshold: String(config.conviction_threshold),
+    },
+    pending_approvals: pendingApprovals,
+    agents,
+    require_approval: config.require_approval,
   });
+});
 
 
   // POST /api/bot/toggle — Toggle bot active/inactive
@@ -117,6 +118,34 @@ export async function registerRoutes(
       res.json({ id: req.params.id, status: "rejected" });
     } catch (e) {
       res.status(500).json({ error: "Failed to reject trade" });
+    }
+  });
+
+  // GET /api/bot/threshold — Get conviction threshold
+  app.get("/api/bot/threshold", async (_req, res) => {
+    try {
+      const threshold = await storage.getConvictionThreshold();
+      res.json({ conviction_threshold: threshold });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to get threshold" });
+    }
+  });
+
+  // POST /api/bot/threshold — Update conviction threshold
+  app.post("/api/bot/threshold", async (req, res) => {
+    try {
+      const { conviction_threshold } = req.body;
+      const threshold = parseFloat(conviction_threshold);
+      
+      if (isNaN(threshold) || threshold < 0 || threshold > 100) {
+        return res.status(400).json({ error: "Invalid threshold" });
+      }
+      
+      await storage.setConvictionThreshold(threshold);
+      broadcastUpdate({ type: "update", data: await getBotStatus() });
+      res.json({ conviction_threshold: threshold, status: "ok" });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to set threshold" });
     }
   });
 

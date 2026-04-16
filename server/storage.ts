@@ -1,4 +1,4 @@
-import * as Database from "better-sqlite3";
+import Database from "better-sqlite3";
 import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "../shared/schema";
@@ -38,6 +38,7 @@ interface PendingApproval {
   marketProb: number;
   modelProb: number;
   timestamp: string;
+  analysis: string | null;
   status: "pending" | "approved" | "rejected" | "expired";
 }
 
@@ -56,6 +57,7 @@ interface BotConfig {
   max_positions: number;
   min_edge: number;
   require_approval: boolean;
+  conviction_threshold: number;
 }
 
 // In-memory config (reads from environment)
@@ -67,6 +69,7 @@ let config: BotConfig = {
   max_positions: parseInt(process.env.MAX_POSITIONS ?? "1"),
   min_edge: parseFloat(process.env.MIN_EDGE ?? "0.08"),
   require_approval: (process.env.REQUIRE_APPROVAL ?? "true").toLowerCase() === "true",
+  conviction_threshold: parseFloat(process.env.CONVICTION_THRESHOLD ?? "0"),
 };
 
 export interface IStorage {
@@ -76,14 +79,17 @@ export interface IStorage {
   getConfig(): BotConfig;
   updateConfig(partial: Partial<BotConfig>): void;
   getPendingApprovals(): Promise<PendingApproval[]>;
+  resolveApproval(id: string, status: string): Promise<void>;
   getAgentStatus(): Promise<AgentInfo[]>;
 }
 
 export class SQLiteStorage implements IStorage {
   private db: ReturnType<typeof drizzle>;
+  private rawDb: Database.Database;
 
   constructor() {
     const sqlite = new Database("data/pollyedge.db");
+    this.rawDb = sqlite;
     this.db = drizzle(sqlite, { schema });
   }
 
@@ -190,8 +196,16 @@ export class SQLiteStorage implements IStorage {
       marketProb: row.marketProb,
       modelProb: row.modelProb,
       timestamp: row.timestamp,
+      analysis: row.analysis,
       status: row.status as PendingApproval["status"],
     }));
+  }
+
+  async resolveApproval(id: string, status: string): Promise<void> {
+    this.db.update(schema.pendingApprovals)
+      .set({ status })
+      .where(eq(schema.pendingApprovals.id, id))
+      .run();
   }
 
   async getAgentStatus(): Promise<AgentInfo[]> {
@@ -219,8 +233,42 @@ export class SQLiteStorage implements IStorage {
       signalsFound: row.signalsFound,
     }));
   }
+
+  async getConvictionThreshold(): Promise<number> {
+    // Read from SQLite bot_state table
+    const rows = this.db.select()
+      .from(schema.botState)
+      .where(eq(schema.botState.key, "conviction_threshold"))
+      .all();
+    
+    if (rows.length === 0 || !rows[0].value) {
+      return 0;
+    }
+    
+    try {
+      return parseFloat(rows[0].value);
+    } catch {
+      return 0;
+    }
+  }
+
+  async setConvictionThreshold(value: number): Promise<void> {
+    // Store in SQLite bot_state table
+    this.db.insert(schema.botState)
+      .values({ key: "conviction_threshold", value: String(value) })
+      .onConflictDoUpdate({
+        target: schema.botState.key,
+        set: { value: String(value) },
+      })
+      .run();
+    
+    // Update in-memory config
+    config.conviction_threshold = value;
+  }
+
 }
 
 // Backward compatibility: export as MemStorage
 export const MemStorage = SQLiteStorage;
 export const storage = new SQLiteStorage();
+

@@ -82,6 +82,7 @@ def init_db() -> None:
             "market_prob REAL NOT NULL,"
             "model_prob REAL NOT NULL,"
             "timestamp TEXT NOT NULL,"
+            "analysis TEXT,"
             "status TEXT NOT NULL DEFAULT 'pending')"
         )
         conn.execute(
@@ -218,8 +219,8 @@ def add_pending_approval(entry: dict) -> None:
     with _conn() as conn:
         conn.execute(
             "INSERT OR REPLACE INTO pending_approvals "
-            "(id, label, side, size, edge, source, score, market_prob, model_prob, timestamp, status) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "(id, label, side, size, edge, source, score, market_prob, model_prob, timestamp, analysis, status) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 entry["id"],
                 entry.get("label", "Unknown"),
@@ -231,6 +232,7 @@ def add_pending_approval(entry: dict) -> None:
                 float(entry.get("market_prob", 0)),
                 float(entry.get("model_prob", 0)),
                 entry.get("timestamp", datetime.now(timezone.utc).isoformat()),
+                entry.get("analysis", None),
                 entry.get("status", "pending"),
             ),
         )
@@ -260,13 +262,19 @@ def resolve_pending_approval(id: str, status: str) -> None:
         )
 
 
-def get_pending_approvals(status: str = "pending", limit: int = 50) -> list[dict]:
-    """Return pending approvals with the given status."""
+def get_pending_approvals(status: Optional[str] = None, limit: int = 50) -> list[dict]:
+    """Return pending approvals with the given status. If status is None, return all."""
     with _conn() as conn:
-        cursor = conn.execute(
-            "SELECT * FROM pending_approvals WHERE status = ? ORDER BY timestamp DESC LIMIT ?",
-            (status, limit),
-        )
+        if status is not None:
+            cursor = conn.execute(
+                "SELECT * FROM pending_approvals WHERE status = ? ORDER BY timestamp DESC LIMIT ?",
+                (status, limit),
+            )
+        else:
+            cursor = conn.execute(
+                "SELECT * FROM pending_approvals ORDER BY timestamp DESC LIMIT ?",
+                (limit,),
+            )
         return [dict(row) for row in cursor]
 
 
@@ -369,3 +377,38 @@ def get_all_time_pnl() -> float:
         cursor = conn.execute("SELECT COALESCE(SUM(pnl), 0) AS total FROM trades")
         row = cursor.fetchone()
         return float(row["total"]) if row else 0.0
+
+
+# ----------------------------------------------------------------------
+# Conviction Threshold
+# ----------------------------------------------------------------------
+
+
+def get_conviction_threshold() -> float:
+    """
+    Return the conviction threshold value (0-100).
+    Returns 0 if not set.
+    """
+    with _conn() as conn:
+        cursor = conn.execute(
+            "SELECT value FROM bot_state WHERE key = ?", ("conviction_threshold",)
+        )
+        row = cursor.fetchone()
+        if row is None:
+            return 0.0
+        try:
+            return float(row["value"])
+        except (ValueError, TypeError):
+            return 0.0
+
+
+def set_conviction_threshold(value: float) -> None:
+    """
+    Set the conviction threshold value (0-100).
+    """
+    with _conn() as conn:
+        conn.execute(
+            "INSERT INTO bot_state (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            ("conviction_threshold", str(value)),
+        )

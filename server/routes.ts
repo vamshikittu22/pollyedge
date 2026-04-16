@@ -36,6 +36,7 @@ export async function registerRoutes(
     });
   });
 
+
   // POST /api/bot/toggle — Toggle bot active/inactive
   app.post("/api/bot/toggle", async (_req, res) => {
     const state = await storage.getBotState();
@@ -54,6 +55,26 @@ export async function registerRoutes(
       min_edge: min_edge ? parseFloat(min_edge) : undefined,
     });
     res.json({ status: "ok" });
+  });
+
+  // POST /api/approvals/:id/approve — Approve a pending trade from dashboard
+  app.post("/api/approvals/:id/approve", async (req, res) => {
+    try {
+      await storage.resolveApproval(req.params.id, "approved");
+      res.json({ id: req.params.id, status: "approved" });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to approve trade" });
+    }
+  });
+
+  // POST /api/approvals/:id/reject — Reject a pending trade from dashboard
+  app.post("/api/approvals/:id/reject", async (req, res) => {
+    try {
+      await storage.resolveApproval(req.params.id, "rejected");
+      res.json({ id: req.params.id, status: "rejected" });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to reject trade" });
+    }
   });
 
   return httpServer;

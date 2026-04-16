@@ -88,10 +88,10 @@ A high-conviction trading command center. The bot researches opportunities acros
 4. News + price action + sentiment all factored in
 
 **Plans:**
-- [ ] 03-01: Implement MomentumAgent (price mean-reversion)
-- [ ] 03-02: Improve conviction scoring algorithm
-- [ ] 03-03: Add Polymarket market discovery scanner
-- [ ] 03-04: Improve opportunity display with full analysis
+- [x] 03-01: Implement MomentumAgent improvements
+- [x] 03-02: Improve conviction scoring algorithm
+- [x] 03-03: Add Polymarket market discovery scanner
+- [x] 03-04: Improve opportunity display with full analysis
 
 ---
 
@@ -154,7 +154,7 @@ Phase 2                         Phase 3
 |-------|--------|-------|----------|
 | 0. Critical Fixes | ✅ Complete | 5/5 | 100% |
 | 1. Integration | ✅ Complete | 5/5 | 100% |
-| 2. Dashboard | Planned | 4 | 0% |
+| 2. Dashboard | ✅ Complete | 4/4 | 100% |
 | 3. Research | Not started | 4 | 0% |
 | 4. Conviction Filter | Not started | 2 | 0% |
 | 5. Execution | Not started | 3 | 0% |

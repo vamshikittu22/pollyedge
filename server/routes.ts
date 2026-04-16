@@ -1,6 +1,45 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { wss } from "./index";
+
+// Broadcast updates to all connected WebSocket clients
+export function broadcastUpdate(data: unknown) {
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) { // WebSocket.OPEN
+      client.send(JSON.stringify(data));
+    }
+  });
+}
+
+// Helper to get current bot status for broadcasting
+async function getBotStatus() {
+  const state = await storage.getBotState();
+  const trades = await storage.getTrades();
+  const config = storage.getConfig();
+  const pendingApprovals = await storage.getPendingApprovals();
+  const agents = await storage.getAgentStatus();
+
+  return {
+    bot_active: state.bot_active,
+    daily_pnl: state.daily_pnl,
+    all_time_pnl: state.all_time_pnl,
+    balance: config.starting_balance + state.all_time_pnl,
+    dry_run: config.dry_run,
+    total_trades: state.total_trades,
+    open_positions: state.open_positions,
+    trades,
+    rules: {
+      max_trade_pct: String(config.max_trade_pct),
+      daily_loss_cap: String(config.daily_loss_cap),
+      max_positions: String(config.max_positions),
+      min_edge: String(config.min_edge),
+    },
+    pending_approvals: pendingApprovals,
+    agents,
+    require_approval: config.require_approval,
+  };
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -42,6 +81,7 @@ export async function registerRoutes(
     const state = await storage.getBotState();
     state.bot_active = !state.bot_active;
     await storage.saveBotState(state);
+    broadcastUpdate({ type: "update", data: await getBotStatus() });
     res.json({ bot_active: state.bot_active });
   });
 
@@ -54,6 +94,7 @@ export async function registerRoutes(
       max_positions: max_positions ? parseInt(max_positions) : undefined,
       min_edge: min_edge ? parseFloat(min_edge) : undefined,
     });
+    broadcastUpdate({ type: "update", data: await getBotStatus() });
     res.json({ status: "ok" });
   });
 
@@ -61,6 +102,7 @@ export async function registerRoutes(
   app.post("/api/approvals/:id/approve", async (req, res) => {
     try {
       await storage.resolveApproval(req.params.id, "approved");
+      broadcastUpdate({ type: "update", data: await getBotStatus() });
       res.json({ id: req.params.id, status: "approved" });
     } catch (e) {
       res.status(500).json({ error: "Failed to approve trade" });
@@ -71,6 +113,7 @@ export async function registerRoutes(
   app.post("/api/approvals/:id/reject", async (req, res) => {
     try {
       await storage.resolveApproval(req.params.id, "rejected");
+      broadcastUpdate({ type: "update", data: await getBotStatus() });
       res.json({ id: req.params.id, status: "rejected" });
     } catch (e) {
       res.status(500).json({ error: "Failed to reject trade" });

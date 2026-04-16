@@ -2,9 +2,18 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { WebSocketServer } from "ws";
 
 const app = express();
 const httpServer = createServer(app);
+
+// WebSocket server attached to the HTTP server
+export const wss = new WebSocketServer({ server: httpServer, path: "/ws" });
+
+wss.on("connection", (ws) => {
+  console.log("Client connected to WebSocket");
+  ws.on("close", () => console.log("Client disconnected from WebSocket"));
+});
 
 declare module "http" {
   interface IncomingMessage {

@@ -157,72 +157,93 @@ export function ApprovalQueue({ approvals, requireApproval }: ApprovalQueueProps
           </div>
         ) : (
           <div className="space-y-2">
-            {approvals.map((approval) => (
-              <div
-                key={approval.id}
-                className="p-3 rounded-md bg-muted/30 border border-border/30"
-                data-testid={`row-approval-${approval.id}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-foreground truncate">
-                      {approval.label}
-                    </p>
-                    {approval.analysis && (
-                      <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-pre-wrap">
-                        ↳ {approval.analysis}
+            {approvals.map((approval) => {
+              const parsedAnalysis = parseAnalysis(approval.analysis);
+              const hasAnalysis = !!parsedAnalysis;
+
+              return (
+                <div
+                  key={approval.id}
+                  className="p-3 rounded-md bg-muted/30 border border-border/30"
+                  data-testid={`row-approval-${approval.id}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-foreground truncate">
+                        {approval.label}
                       </p>
-                    )}
-                    <div className="flex items-center gap-2 mt-1.5">
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <Badge
+                          variant="secondary"
+                          className={`text-[10px] px-1.5 ${sourceColors[approval.source] || ""}`}
+                        >
+                          {approval.source.toUpperCase()}
+                        </Badge>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          {approval.side} ${approval.size.toFixed(2)} @ {(approval.marketProb * 100).toFixed(0)}%
+                        </span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          edge: {(approval.edge * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
                       <Badge
                         variant="secondary"
-                        className={`text-[10px] px-1.5 ${sourceColors[approval.source] || ""}`}
+                        className={`text-[10px] px-1.5 ${statusColors[approval.status] || ""}`}
+                        data-testid={`badge-approval-status-${approval.id}`}
                       >
-                        {approval.source.toUpperCase()}
+                        {approval.status}
                       </Badge>
                       <span className="text-[10px] text-muted-foreground tabular-nums">
-                        {approval.side} ${approval.size.toFixed(2)} @ {(approval.marketProb * 100).toFixed(0)}%
-                      </span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
-                        edge: {(approval.edge * 100).toFixed(1)}%
+                        score: {approval.score}/100
                       </span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <Badge
-                      variant="secondary"
-                      className={`text-[10px] px-1.5 ${statusColors[approval.status] || ""}`}
-                      data-testid={`badge-approval-status-${approval.id}`}
-                    >
-                      {approval.status}
-                    </Badge>
-                    <span className="text-[10px] text-muted-foreground tabular-nums">
-                      score: {approval.score}/100
-                    </span>
-                  </div>
+
+                  {/* Analysis breakdown with collapsible */}
+                  {hasAnalysis ? (
+                    <Collapsible className="mt-2">
+                      <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                        <Activity className="w-3 h-3" />
+                        <span>View Analysis</span>
+                        <ChevronDown className="w-3 h-3 data-[state=open]:hidden" />
+                        <ChevronUp className="w-3 h-3 hidden data-[state=open]:block" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent>
+                        <AnalysisBreakdown analysis={parsedAnalysis!} expanded={false} />
+                      </CollapsibleContent>
+                    </Collapsible>
+                  ) : approval.analysis ? (
+                    // Fallback for legacy plain text analysis
+                    <p className="text-[11px] text-muted-foreground mt-0.5 whitespace-pre-wrap">
+                      ↳ {approval.analysis}
+                    </p>
+                  ) : null}
+
+                  {approval.status === "pending" && (
+                    <div className="flex gap-2 mt-2 pt-2 border-t border-border/20">
+                      <button
+                        onClick={() => approveMutation.mutate(approval.id)}
+                        disabled={isActioning}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs rounded font-bold transition-colors"
+                        data-testid={`btn-approve-${approval.id}`}
+                      >
+                        ✅ Approve
+                      </button>
+                      <button
+                        onClick={() => rejectMutation.mutate(approval.id)}
+                        disabled={isActioning}
+                        className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs rounded font-bold transition-colors"
+                        data-testid={`btn-reject-${approval.id}`}
+                      >
+                        ❌ Reject
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {approval.status === "pending" && (
-                  <div className="flex gap-2 mt-2 pt-2 border-t border-border/20">
-                    <button
-                      onClick={() => approveMutation.mutate(approval.id)}
-                      disabled={isActioning}
-                      className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs rounded font-bold transition-colors"
-                      data-testid={`btn-approve-${approval.id}`}
-                    >
-                      ✅ Approve
-                    </button>
-                    <button
-                      onClick={() => rejectMutation.mutate(approval.id)}
-                      disabled={isActioning}
-                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs rounded font-bold transition-colors"
-                      data-testid={`btn-reject-${approval.id}`}
-                    >
-                      ❌ Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </CardContent>

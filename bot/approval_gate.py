@@ -2,14 +2,16 @@
 Human-in-the-loop approval gate.
 Every signal gets sent to YOUR Telegram with APPROVE/REJECT buttons.
 Bot waits up to 2 minutes for your response.
+Dashboard approvals via SQLite are also checked each poll cycle.
 """
 
-import os, time, datetime, logging, requests
+import json, os, time, datetime, logging, requests
 from dotenv import load_dotenv
 from bot.db import (
     init_db,
     add_pending_approval,
     resolve_pending_approval,
+    get_pending_approvals,
 )
 
 load_dotenv()
@@ -92,6 +94,18 @@ class ApprovalGate:
                 log.error("Failed to send approval message")
                 return False
 
+            # Build analysis JSON with signal breakdown
+            analysis = {
+                "model_prob": signal.get("model_prob", 0),
+                "market_prob": signal.get("market_prob", 0),
+                "edge": signal.get("edge", 0),
+                "factors": signal.get("factors", []),
+                "confidence": signal.get("score", 0),
+                "reasoning": signal.get(
+                    "reasoning", f"{source.upper()} signal: {edge:+.1%} edge detected"
+                ),
+            }
+
             # Write pending approval to SQLite before poll loop
             entry = {
                 "id": msg_id_key,
@@ -103,12 +117,13 @@ class ApprovalGate:
                 "score": signal.get("score", 0),
                 "market_prob": signal.get("market_prob", 0),
                 "model_prob": signal.get("model_prob", 0),
-                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
                 "status": "pending",
+                "analysis": json.dumps(analysis),
             }
             add_pending_approval(entry)
 
-            # Poll for callback answer
+            # Poll for callback answer (checks SQLite + Telegram each cycle)
             start = time.time()
             while time.time() - start < TIMEOUT:
                 decision = self._poll_callback(msg_id_key, message_id)
@@ -132,7 +147,24 @@ class ApprovalGate:
             return False  # Fail safe: reject on error
 
     def _poll_callback(self, key: str, message_id: int):
-        """Check Telegram for user's button click."""
+        """Check SQLite (dashboard) then Telegram for user's decision."""
+        # Check 1: SQLite — dashboard may have already approved/rejected
+        try:
+            rows = get_pending_approvals(status=None, limit=50)
+            for row in rows:
+                if row["id"] == key and row["status"] in ("approved", "rejected"):
+                    approved = row["status"] == "approved"
+                    status_text = (
+                        "✅ APPROVED (dashboard)"
+                        if approved
+                        else "❌ REJECTED (dashboard)"
+                    )
+                    self._edit_message(message_id, f"{status_text} — {key[:8]}…")
+                    return approved
+        except Exception:
+            pass
+
+        # Check 2: Telegram — mobile approval (existing flow)
         try:
             resp = requests.get(
                 f"https://api.telegram.org/bot{TOKEN}/getUpdates",

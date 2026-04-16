@@ -1,5 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest, useWebSocket, type WebSocketMessage } from "@/lib/queryClient";
 import type { BotStatus } from "@shared/schema";
 import { BalanceCard } from "@/components/BalanceCard";
 import { BotStatusCard } from "@/components/BotStatusCard";
@@ -32,15 +32,26 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
+
   const { data, isLoading, error } = useQuery<BotStatus>({
     queryKey: ["/api/bot/status"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/bot/status");
       return res.json();
     },
-    refetchInterval: 5000,
-    staleTime: 3000,
+    staleTime: Infinity,
   });
+
+  // WebSocket connection for real-time updates
+  const wsStatus = useWebSocket(
+    `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`,
+    (message: WebSocketMessage) => {
+      if (message.type === "update" && message.data) {
+        queryClient.setQueryData(["/api/bot/status"], message.data);
+      }
+    }
+  );
 
   if (isLoading) return <DashboardSkeleton />;
 
@@ -98,8 +109,17 @@ export default function Dashboard() {
               {data.dry_run ? "DRY RUN" : "LIVE"}
             </Badge>
           </div>
-          <p className="text-xs text-muted-foreground tabular-nums">
-            Refreshes every 5s
+          <p className="text-xs text-muted-foreground tabular-nums flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                wsStatus === "connected"
+                  ? "bg-emerald-500"
+                  : wsStatus === "connecting"
+                  ? "bg-amber-500 animate-pulse"
+                  : "bg-red-500"
+              }`}
+            />
+            {wsStatus === "connected" ? "Live updates" : "Connecting..."}
           </p>
         </header>
 
@@ -116,7 +136,7 @@ export default function Dashboard() {
             openPositions={Object.keys(data.open_positions).length}
             maxPositions={parseInt(data.rules.max_positions)}
           />
-          <RulesPanel rules={data.rules} />
+          <RulesPanel rules={data.rules} approvals={data.pending_approvals || []} />
         </div>
 
         {/* v2.0: Agent Swarm + Approval Queue */}

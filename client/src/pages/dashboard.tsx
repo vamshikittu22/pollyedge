@@ -145,6 +145,7 @@ export default function Dashboard() {
           <ApprovalQueue
             approvals={data.pending_approvals || []}
             requireApproval={data.require_approval ?? true}
+            threshold={parseInt(data.rules?.conviction_threshold) || 0}
           />
         </div>
 

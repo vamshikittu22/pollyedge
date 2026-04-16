@@ -36,6 +36,7 @@ export const pendingApprovals = sqliteTable("pending_approvals", {
   marketProb: real("market_prob").notNull(),
   modelProb: real("model_prob").notNull(),
   timestamp: text("timestamp").notNull(), // ISO timestamp
+  analysis: text("analysis"),
   status: text("status").notNull().default("pending"), // "pending" | "approved" | "rejected" | "expired"
 });
 
@@ -64,3 +65,31 @@ export type NewPendingApproval = typeof pendingApprovals.$inferInsert;
 
 export type Trade = typeof trades.$inferSelect;
 export type NewTrade = typeof trades.$inferInsert;
+
+export interface Rules {
+  max_trade_pct: string;
+  daily_loss_cap: string;
+  max_positions: string;
+  min_edge: string;
+  conviction_threshold: string;
+}
+
+export interface BotStatus {
+  bot_active: boolean;
+  daily_pnl: number;
+  all_time_pnl: number;
+  balance: number;
+  dry_run: boolean;
+  total_trades: number;
+  open_positions: Record<string, {
+    side: string;
+    size: number;
+    entry_price: number;
+    label: string;
+  }>;
+  trades: Trade[];
+  rules: Rules;
+  pending_approvals: PendingApproval[];
+  agents: AgentStatus[];
+  require_approval: boolean;
+}

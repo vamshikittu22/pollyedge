@@ -18,6 +18,7 @@ interface AnalysisData {
 interface ApprovalQueueProps {
   approvals: PendingApproval[]
   requireApproval: boolean
+  threshold?: number
 }
 
 const sourceColors: Record<string, string> = {
@@ -95,8 +96,12 @@ function AnalysisBreakdown({ analysis, expanded }: { analysis: AnalysisData; exp
   )
 }
 
-export function ApprovalQueue({ approvals, requireApproval }: ApprovalQueueProps) {
-  const pendingCount = approvals.filter(a => a.status === "pending").length
+export function ApprovalQueue({ approvals, requireApproval, threshold = 0 }: ApprovalQueueProps) {
+  const thresholdNum = parseInt(String(threshold)) || 0
+  const filteredApprovals = approvals.filter(a => a.score >= thresholdNum)
+  const hiddenCount = approvals.length - filteredApprovals.length
+  
+  const pendingCount = filteredApprovals.filter(a => a.status === "pending").length
   const queryClient = useQueryClient()
 
   const approveMutation = useMutation({
@@ -148,7 +153,12 @@ export function ApprovalQueue({ approvals, requireApproval }: ApprovalQueueProps
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {approvals.length === 0 ? (
+        {hiddenCount > 0 && (
+          <p className="text-[10px] text-muted-foreground mb-2 text-center font-medium">
+            Showing {filteredApprovals.length} of {approvals.length} signals (filtered by threshold)
+          </p>
+        )}
+        {filteredApprovals.length === 0 ? (
           <div className="text-center py-6" data-testid="text-no-approvals">
             <p className="text-sm text-muted-foreground">No trade proposals yet</p>
             <p className="text-xs text-muted-foreground/60 mt-1">
@@ -157,7 +167,7 @@ export function ApprovalQueue({ approvals, requireApproval }: ApprovalQueueProps
           </div>
         ) : (
           <div className="space-y-2">
-            {approvals.map((approval) => {
+            {filteredApprovals.map((approval) => {
               const parsedAnalysis = parseAnalysis(approval.analysis);
               const hasAnalysis = !!parsedAnalysis;
 

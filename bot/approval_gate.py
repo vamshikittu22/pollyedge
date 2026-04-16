@@ -12,6 +12,7 @@ from bot.db import (
     add_pending_approval,
     resolve_pending_approval,
     get_pending_approvals,
+    get_conviction_threshold,
 )
 
 load_dotenv()
@@ -51,6 +52,15 @@ class ApprovalGate:
         market_p = signal.get("market_prob", 0)
         source = signal.get("source", "unknown")
         score = signal.get("score", 0)
+
+        # Check conviction threshold
+        threshold = get_conviction_threshold()
+        if score < threshold:
+            log.info(
+                f"Signal {label} score {score} below threshold {threshold}, skipping"
+            )
+            return True  # Auto-approve but don't request (effectively skip)
+
         msg_id_key = f"{signal['token_id'][:8]}_{int(time.time())}"
 
         msg = (

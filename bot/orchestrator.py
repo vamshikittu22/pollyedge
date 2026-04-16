@@ -142,39 +142,48 @@ class Orchestrator:
             log.error(f"Approve/execute error: {e}")
 
     def _score_signal(self, signal: dict) -> int:
-        """Score 0-100. Higher = better trade opportunity."""
+        """Score 0-100 with multi-factor weighing."""
         score = 0
         edge = abs(signal.get("edge", 0))
 
-        if edge >= 0.20:
+        # 1. Edge score (0-40)
+        if edge >= 0.25:
             score += 40
-        elif edge >= 0.15:
+        elif edge >= 0.18:
             score += 30
-        elif edge >= 0.10:
+        elif edge >= 0.12:
             score += 20
         elif edge >= 0.08:
             score += 10
 
-        # Boost by source reliability
+        # 2. Source reliability (0-25)
         source_scores = {
-            "earnings": 25,  # Daloopa fundamental data
-            "underpriced": 15,  # YES+NO sum discount (not true arb)
-            "news": 20,  # News sentiment
-            "momentum": 15,  # Price momentum
-            "crypto": 15,  # Crypto signals
+            "earnings": 25,  # Multi-source validation
+            "news+momentum": 20,  # Cross-agent
+            "news": 18,
+            "momentum": 15,
+            "crypto": 12,
+            "arb": 10,
+            "underpriced": 10,
         }
         score += source_scores.get(signal.get("source", ""), 10)
 
-        # Boost for high volume markets (more liquidity)
+        # 3. Confluence (0-15) - NEW
+        confirmations = signal.get("confirmations", 1)
+        score += min((confirmations - 1) * 15, 15)
+
+        # Boost for structured analysis breakdown
+        if signal.get("analysis_breakdown"):
+            score += 5
+
+        # 4. Volume (0-20)
         vol = signal.get("volume", 0)
-        if vol > 500_000:
+        if vol > 1_000_000:
             score += 20
+        elif vol > 500_000:
+            score += 15
         elif vol > 100_000:
             score += 10
-
-        # Boost if multiple agents agree on same market
-        confirmations = signal.get("confirmations", 1)
-        score += (confirmations - 1) * 15
 
         return min(score, 100)
 

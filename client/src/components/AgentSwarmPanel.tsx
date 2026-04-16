@@ -1,9 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { AgentInfo } from "@shared/schema";
+import type { AgentStatus } from "@shared/schema";
 
 interface AgentSwarmPanelProps {
-  agents: AgentInfo[];
+  agents: AgentStatus[];
 }
 
 const agentIcons: Record<string, string> = {
@@ -55,9 +55,9 @@ export function AgentSwarmPanel({ agents }: AgentSwarmPanelProps) {
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {agent.signals_found > 0 && (
+              {agent.signalsFound > 0 && (
                 <span className="text-[10px] text-muted-foreground tabular-nums">
-                  {agent.signals_found} signals
+                  {agent.signalsFound} signals
                 </span>
               )}
               <Badge

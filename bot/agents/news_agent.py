@@ -81,8 +81,8 @@ class NewsAgent(BaseAgent):
                             "edge":        round(edge, 4),
                             "label":       mkt["question"][:50],
                             "source":      "news",
+                            "analysis":    article.get("title", "")[:80],
                             "volume":      float(mkt.get("volume", 0) or 0),
-                            "headline":    article.get("title", "")[:60],
                         })
                     elif sentiment == "negative" and yes_mid > 0.40:
                         edge = yes_mid - 0.30
@@ -94,6 +94,7 @@ class NewsAgent(BaseAgent):
                             "edge":        round(edge, 4),
                             "label":       mkt["question"][:50],
                             "source":      "news",
+                            "analysis":    article.get("title", "")[:80],
                             "volume":      float(mkt.get("volume", 0) or 0),
                         })
                 except Exception:

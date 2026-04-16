@@ -59,16 +59,16 @@ export function TradesTable({ trades }: TradesTableProps) {
               </TableHeader>
               <TableBody>
                 {sortedTrades.map((trade, i) => {
-                  const pnl = parseFloat(trade.pnl) || 0;
+                  const pnl = trade.pnl || 0;
                   const positive = pnl >= 0;
-                  const ts = trade.timestamp || "";
+                  const ts = trade.closedAt || "";
                   const timeStr = ts.length >= 16
                     ? ts.substring(5, 16).replace("T", " ")
                     : ts;
 
                   return (
                     <TableRow
-                      key={`${trade.token_id}-${i}`}
+                      key={`${trade.tokenId}-${i}`}
                       className="border-border"
                       data-testid={`row-trade-${i}`}
                     >
@@ -79,7 +79,7 @@ export function TradesTable({ trades }: TradesTableProps) {
                         {trade.label}
                       </TableCell>
                       <TableCell className="text-sm text-foreground tabular-nums text-right py-2.5">
-                        {parseFloat(trade.exit_price).toFixed(4)}
+                        {trade.exitPrice.toFixed(4)}
                       </TableCell>
                       <TableCell
                         className={`text-sm font-medium tabular-nums text-right py-2.5 ${

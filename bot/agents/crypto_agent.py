@@ -74,7 +74,7 @@ class CryptoAgent(BaseAgent):
                             "edge":        round(edge, 4),
                             "label":       mkt.get("question","")[:50],
                             "source":      "crypto",
-                            "change_24h":  change_24h,
+                            "analysis":    f"24h change: {change_24h:+.1f}%",
                             "volume":      float(mkt.get("volume", 0) or 0),
                         })
                 elif not bullish and yes_mid > 0.45:
@@ -89,6 +89,7 @@ class CryptoAgent(BaseAgent):
                             "edge":        round(edge, 4),
                             "label":       mkt.get("question","")[:50],
                             "source":      "crypto",
+                            "analysis":    f"24h change: {change_24h:+.1f}%",
                             "volume":      float(mkt.get("volume", 0) or 0),
                         })
 

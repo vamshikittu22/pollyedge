@@ -33,10 +33,12 @@ class EarningsAgent(BaseAgent):
                     continue
 
                 yes_mid  = self._get_midpoint(yes_tok)
-                model_p  = self._aggregate_beat_probability(ticker)
+                agg_res  = self._aggregate_beat_probability(ticker)
 
-                if not model_p or yes_mid <= 0:
+                if not agg_res or yes_mid <= 0:
                     continue
+                
+                model_p, analysis = agg_res
 
                 edge = model_p - yes_mid
                 if abs(edge) >= 0.08:
@@ -49,6 +51,7 @@ class EarningsAgent(BaseAgent):
                         "edge":        round(edge, 4),
                         "label":       label[:50],
                         "source":      "earnings",
+                        "analysis":    analysis,
                         "volume":      float(mkt.get("volume", 0) or 0),
                     })
                 time.sleep(0.3)
@@ -58,40 +61,48 @@ class EarningsAgent(BaseAgent):
 
         return sorted(signals, key=lambda x: abs(x["edge"]), reverse=True)
 
-    def _aggregate_beat_probability(self, ticker: str) -> float | None:
+    def _aggregate_beat_probability(self, ticker: str) -> tuple[float, str] | None:
         """
         Combine multiple sources into one beat probability.
         Priority: Daloopa > Yahoo Finance > Alpha Vantage > Simple estimate
         """
         probabilities = []
         weights       = []
+        best_analysis = ""
 
         # Source 1: Daloopa (highest weight — institutional data)
         d = self._daloopa_beat_rate(ticker)
         if d:
-            probabilities.append(d)
+            probabilities.append(d[0])
             weights.append(3)
+            if not best_analysis:
+                best_analysis = d[1]
 
         # Source 2: Yahoo Finance surprise history
         y = self._yahoo_eps_surprise(ticker)
         if y:
-            probabilities.append(y)
+            probabilities.append(y[0])
             weights.append(2)
+            if not best_analysis:
+                best_analysis = y[1]
 
         # Source 3: Alpha Vantage earnings data
         a = self._alpha_vantage_earnings(ticker)
         if a:
-            probabilities.append(a)
+            probabilities.append(a[0])
             weights.append(1)
+            if not best_analysis:
+                best_analysis = a[1]
 
         if not probabilities:
             return None
 
         # Weighted average
         total_weight = sum(weights)
-        return round(sum(p * w for p, w in zip(probabilities, weights)) / total_weight, 4)
+        prob = round(sum(p * w for p, w in zip(probabilities, weights)) / total_weight, 4)
+        return prob, best_analysis
 
-    def _daloopa_beat_rate(self, ticker: str) -> float | None:
+    def _daloopa_beat_rate(self, ticker: str) -> tuple[float, str] | None:
         if not DALOOPA_KEY:
             return None
         try:
@@ -105,11 +116,11 @@ class EarningsAgent(BaseAgent):
             if len(quarters) < 4:
                 return None
             beats = sum(1 for q in quarters if q.get("beat_miss") == "beat")
-            return beats / len(quarters)
+            return (beats / len(quarters), f"Beat {beats}/{len(quarters)} quarters (Daloopa)")
         except Exception:
             return None
 
-    def _yahoo_eps_surprise(self, ticker: str) -> float | None:
+    def _yahoo_eps_surprise(self, ticker: str) -> tuple[float, str] | None:
         """Fetch Yahoo Finance earnings history for beat rate."""
         try:
             url  = f"https://query1.finance.yahoo.com/v10/finance/quoteSummary/{ticker}"
@@ -128,11 +139,11 @@ class EarningsAgent(BaseAgent):
                 return None
             beats = sum(1 for q in history
                        if q.get("surprisePercent", {}).get("raw", 0) > 0)
-            return beats / len(history)
+            return (beats / len(history), f"Beat {beats}/{len(history)} quarters (Yahoo)")
         except Exception:
             return None
 
-    def _alpha_vantage_earnings(self, ticker: str) -> float | None:
+    def _alpha_vantage_earnings(self, ticker: str) -> tuple[float, str] | None:
         if not AV_KEY:
             return None
         try:
@@ -146,7 +157,7 @@ class EarningsAgent(BaseAgent):
                 return None
             beats = sum(1 for q in quarters
                        if float(q.get("surprisePercentage", 0) or 0) > 0)
-            return beats / len(quarters)
+            return (beats / len(quarters), f"Beat {beats}/{len(quarters)} quarters (Alpha Vantage)")
         except Exception:
             return None
 

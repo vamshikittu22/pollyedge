@@ -22,9 +22,9 @@ export function PnLChart({ trades }: PnLChartProps) {
 
     let cumPnl = 0;
     return trades.map((t, i) => {
-      const pnl = parseFloat(t.pnl) || 0;
+      const pnl = t.pnl || 0;
       cumPnl += pnl;
-      const ts = t.timestamp || "";
+      const ts = t.closedAt || "";
       const dateStr = ts.length >= 10 ? ts.substring(5, 10) : `#${i + 1}`;
 
       return {
